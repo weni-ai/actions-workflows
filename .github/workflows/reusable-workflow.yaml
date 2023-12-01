@@ -1,0 +1,136 @@
+name: Build and Deploy 
+
+on:
+  workflow_call:
+    inputs:
+      docker_image:
+        required: true
+        type: string
+      target_application:
+        required: true
+        type: string
+      target_repository:
+        required: true
+        type: string
+      target_repository_branch:
+        required: false
+        type: string
+        default: main
+      target_patch_file:
+        required: true
+        type: string
+    secrets:
+      REGISTRY_ECR:
+        required: false
+      REGISTRY_USERNAME:
+        required: true
+      REGISTRY_TOKEN:
+        required: true
+      DEVOPS_GITHUB_PERMANENT_TOKEN:
+        required: true
+
+env:
+  DOCKER_IMAGE: ${{ inputs.docker_image }}
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: type=ref,event=tag
+          flavor: latest=false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY_ECR }}
+          username: ${{ secrets.REGISTRY_USERNAME }}      
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          labels: ${{ steps.meta.outputs.labels }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+  deploy:
+    env:
+      MANIFESTS_APPLICATION: ${{ inputs.target_application }}
+      MANIFESTS_REPOSITORY: ${{ inputs.target_repository }}
+      MANIFESTS_PATCH_TARGET: ${{ inputs.target_patch_file }}
+      MANIFESTS_REPOSITORY_BRANCH: ${{ inputs.target_repository_branch }}
+    needs: build_and_push
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out Kubernetes Manifests
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.MANIFESTS_REPOSITORY_BRANCH }}
+          repository: ${{ env.MANIFESTS_REPOSITORY }}
+          token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
+          path: ./kubernetes-manifests/
+
+      - name: Update image on deployment
+        working-directory: kubernetes-manifests/${{ env.MANIFESTS_APPLICATION }}
+        env:
+          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
+        run: |
+          which jq > /dev/null 2>&1 || ( sudo apt update; sudo apt install -y jq )
+
+          extver() {
+            echo "$1" | sed s'/^.*[v:-]\([0-9]*\.[0-9]*\.[0-9]*\).*$/\1/'g | head -n1
+          }
+
+          verlte() {
+            [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
+          }
+
+          MANIFESTS_ENV_TARGET=$(echo ${{ needs.build_and_push.outputs.version }} | grep -Eo 'staging|develop' || echo 'production')
+          
+          echo "Target environment: ${MANIFESTS_ENV_TARGET}"
+
+          if [ ! -d "${MANIFESTS_ENV_TARGET}" ] || [ ! -r "${MANIFESTS_ENV_TARGET}/kustomization.yaml" ] || [ ! -r "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}" ]; then
+            echo "${MANIFESTS_ENV_TARGET}, ${MANIFESTS_ENV_TARGET}/kustomization.yaml, or ${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}: Not readable, or neither one of those exists"
+            exit 1
+          else
+            CURRENT_IMAGE=$(cat "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}" | jq -r '.[] | select(.path == "/spec/template/spec/containers/0/image") | .value')
+            CURRENT_VERSION=$(extver "${CURRENT_IMAGE}")
+            TARGET_VERSION=$(extver "${{ env.IMAGE_TAG }}")
+
+            echo "Replacing the following image:"
+            echo "  Image: ${CURRENT_IMAGE%%:*}"
+            echo "  Current version: ${CURRENT_VERSION}"
+            echo "  Target version: ${TARGET_VERSION}"
+
+            if verlte "${CURRENT_VERSION}" "${TARGET_VERSION}"; then
+              NEW_CONFIG=$(jq --arg imageTag "${{ env.IMAGE_TAG }}" '(.. | select(.path == "/spec/template/spec/containers/0/image")?) += {value: $imageTag }' "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}")
+              echo "New configuration:"
+              echo "${NEW_CONFIG}" | tee "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}"
+            else
+              echo "Version in file is greater than build, skipping update yaml"
+              exit 1
+            fi
+          fi
+
+      - name: Commit & Push changes
+        uses: actions-js/push@master
+        with:
+          github_token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
+          repository: ${{ env.MANIFESTS_REPOSITORY }}
+          directory: ./kubernetes-manifests/
+          branch: ${{ env.MANIFESTS_REPOSITORY_BRANCH }}
+          message: "From ${{ github.workflow }}"
