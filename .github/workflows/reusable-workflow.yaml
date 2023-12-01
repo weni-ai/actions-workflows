@@ -67,7 +67,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
 
-  deploy:
+  deploy_manifest:
     env:
       MANIFESTS_APPLICATION: ${{ inputs.target_application }}
       MANIFESTS_REPOSITORY: ${{ inputs.target_repository }}
@@ -122,7 +122,6 @@ jobs:
               echo "${NEW_CONFIG}" | tee "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}"
             else
               echo "Version in file is greater than build, skipping update yaml"
-              exit 1
             fi
           fi
 
