@@ -9,7 +9,7 @@ on:
       dockerfile:
         required: false
         type: string
-        default: main
+        default: Dockerfile
       target_application:
         required: true
         type: string
