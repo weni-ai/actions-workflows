@@ -100,7 +100,7 @@ jobs:
 
       - name: Test
         run: |
-          echo "${{ steps.meta.outputs.tags }}"
+          echo "${{ steps.meta.outputs.tags }}" | base64
 
       - name: Build and Push Docker Image
         id: build
