@@ -3,7 +3,7 @@ name: Build and Deploy
 on:
   workflow_call:
     inputs:
-      docker_arch:
+      image_arch:
         required: false
         type: string
         default: |
@@ -73,7 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ inputs.docker_arch }}
+        include: ${{ inputs.image_arch }}
         #include:
         #  - runner: ubuntu-latest
         #    platform: linux/amd64
