@@ -209,8 +209,11 @@ jobs:
 #            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
 
       - name: Inspect image
+        working-directory: ${{ runner.temp }}/digests
         run: |
-          docker buildx imagetools inspect "${{ env.DOCKER_IMAGE }}:${{ env.IMAGE_TAG }}"
+          for x in $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON"); do
+            docker buildx imagetools inspect "${{ env.DOCKER_IMAGE }}:${x}"
+          done
 
   deploy_manifest:
     env:
