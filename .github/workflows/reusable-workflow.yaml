@@ -208,6 +208,10 @@ jobs:
 #          docker buildx imagetools create -t "${{ env.IMAGE_TAG }}" \
 #            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
 
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect "${{ env.DOCKER_IMAGE }}:${{ env.IMAGE_TAG }}"
+
   deploy_manifest:
     env:
       MANIFESTS_APPLICATION: ${{ inputs.target_application }}
