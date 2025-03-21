@@ -179,10 +179,17 @@ jobs:
 
       - name: Login to Registry
         uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: ${{ secrets.REGISTRY_ECR }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create -t "${{ env.IMAGE_TAG }}" \
+            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
 
   deploy_manifest:
     env:
