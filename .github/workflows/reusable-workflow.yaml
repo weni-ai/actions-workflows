@@ -33,10 +33,6 @@ on:
         required: false
         type: string
         default: ""
-      #image_registry_url:
-      #  required: false
-      #  type: string
-      #  default: ""
       image_tag_prefix_onlatest:
         required: false
         type: string
@@ -228,12 +224,6 @@ jobs:
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
-
-#      - name: Create manifest list and push
-#        working-directory: ${{ runner.temp }}/digests
-#        run: |
-#          docker buildx imagetools create -t "${{ env.IMAGE_TAG }}" \
-#            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
 
       - name: Inspect image
         working-directory: ${{ runner.temp }}/digests
