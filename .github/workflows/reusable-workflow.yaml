@@ -7,10 +7,16 @@ on:
         required: false
         type: string
         default: |
-          - arch: arm64
-            image: ubuntu-24.04-arm
-          - arch: amd64
-            image: ubuntu-latest
+          [
+            {
+              "arch": "arm64",
+              "image": "ubuntu-24.04-arm"
+            },
+            {
+              "arch": "amd64",
+              "image": "ubuntu-latest"
+            }
+          ]
       image_repository:
         required: true
         type: string
@@ -73,7 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ inputs.image_arch }}
+        include: ${{ fromJson(inputs.image_arch) }}
         #include:
         #  - runner: ubuntu-latest
         #    platform: linux/amd64
