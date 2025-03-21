@@ -89,7 +89,7 @@ jobs:
     outputs:
       image_by_environment: ${{ steps.setup.outputs.image_by_environment }}
     steps:
-      - name: Set outpus
+      - name: Set outputs
         id: setup
         run: |
           TAG="$( echo "${GITHUB_REF}" | cut -d'/' -f3 )"
