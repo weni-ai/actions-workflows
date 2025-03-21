@@ -34,6 +34,10 @@ on:
         required: false
         type: string
         default: ""
+      debug:
+        required: false
+        type: string
+        default: ""
       dockerfile:
         required: false
         type: string
@@ -69,12 +73,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ${{ toJSON(docker_arch) }}
-        include:
-          - runner: ubuntu-latest
-            platform: linux/amd64
-          - runner: ubuntu-24.04-arm
-            platform: linux/arm64
+        include: ${{ inputs.docker_arch }}
+        #include:
+        #  - runner: ubuntu-latest
+        #    platform: linux/amd64
+        #  - runner: ubuntu-24.04-arm
+        #    platform: linux/arm64
     runs-on: ${{ matrix.runner }}
     outputs:
       version: ${{ steps.meta.outputs.version }}
@@ -215,9 +219,10 @@ jobs:
 
       - name: Inspect image
         working-directory: ${{ runner.temp }}/digests
+        if: inputs.debug == 'true'
         run: |
           for x in $(jq -cr '.tags | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON"); do
-            #echo docker buildx imagetools inspect "${x}"
+            echo docker buildx imagetools inspect "${x}"
             docker buildx imagetools inspect "${x}"
           done
 
