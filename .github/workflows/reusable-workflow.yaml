@@ -20,6 +20,11 @@ on:
       image_repository:
         required: true
         type: string
+      image_tags:
+        required: false
+        type: string
+        default: |
+          type=ref,event=tag
       image_tag_prefix:
         required: false
         type: string
@@ -102,7 +107,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKER_IMAGE }}
-          tags: type=ref,event=tag
+          tags: ${{ inputs.image_tags }}
           flavor: |
             latest=${{ inputs.image_latest }}
             prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
@@ -126,11 +131,8 @@ jobs:
           context: .
           build-args: ${{ inputs.build_args }}
           labels: ${{ steps.meta.outputs.labels }}
-          #push: true
-          #tags: ${{ steps.meta.outputs.tags }}
           platforms: ${{ steps.matrix.platform }}
           outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          #outputs: type=image,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
@@ -206,7 +208,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKER_IMAGE }}
-          tags: type=ref,event=tag
+          tags: ${{ inputs.image_tags }}
           flavor: |
             latest=${{ inputs.image_latest }}
             prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
