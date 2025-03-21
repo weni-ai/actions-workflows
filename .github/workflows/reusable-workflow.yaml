@@ -245,7 +245,7 @@ jobs:
           done
 
   deploy_manifest:
-    if: inputs.target_repository == 'true'
+    if: inputs.target_repository != ''
     env:
       MANIFESTS_APPLICATION: ${{ inputs.target_application }}
       MANIFESTS_REPOSITORY: ${{ inputs.target_repository }}
