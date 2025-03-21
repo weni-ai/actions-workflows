@@ -186,11 +186,27 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_TOKEN }}
 
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: type=ref,event=tag
+          flavor: |
+            latest=${{ inputs.image_latest }}
+            prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
+
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
-          docker buildx imagetools create -t "${{ env.IMAGE_TAG }}" \
-            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+
+#      - name: Create manifest list and push
+#        working-directory: ${{ runner.temp }}/digests
+#        run: |
+#          docker buildx imagetools create -t "${{ env.IMAGE_TAG }}" \
+#            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
 
   deploy_manifest:
     env:
