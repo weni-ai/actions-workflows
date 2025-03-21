@@ -1,28 +1,82 @@
-name: Build and Deploy 
+name: Build and Deploy
 
 on:
   workflow_call:
     inputs:
-      docker_image:
+      image_arch:
+        required: false
+        type: string
+        default: |
+          [
+            {
+              "platform": "linux/arm64",
+              "runner": "ubuntu-24.04-arm"
+            },
+            {
+              "platform": "linux/amd64",
+              "runner": "ubuntu-latest"
+            }
+          ]
+      image_repository:
         required: true
         type: string
+      image_tags:
+        required: false
+        type: string
+        default: |
+          type=ref,event=tag
+      image_tag_latest_by_environment:
+        required: false
+        type: string
+        default: "false"
+      image_tag_prefix:
+        required: false
+        type: string
+        default: ""
+      #image_registry_url:
+      #  required: false
+      #  type: string
+      #  default: ""
+      image_tag_prefix_onlatest:
+        required: false
+        type: string
+        default: "false"
+      image_latest:
+        required: false
+        type: string
+        default: "false"
+      build_args:
+        required: false
+        type: string
+        default: ""
+      build_context:
+        required: false
+        type: string
+        default: "."
+      debug:
+        required: false
+        type: string
+        default: ""
       dockerfile:
         required: false
         type: string
         default: Dockerfile
       target_application:
-        required: true
+        required: false
         type: string
+        default: ""
       target_repository:
-        required: true
+        required: false
         type: string
+        default: ""
       target_repository_branch:
         required: false
         type: string
-        default: main
+        default: "main"
       target_patch_file:
-        required: true
+        required: false
         type: string
+        default: "deployment.json"
     secrets:
       REGISTRY_ECR:
         required: false
@@ -34,14 +88,54 @@ on:
         required: true
 
 env:
-  DOCKER_IMAGE: ${{ inputs.docker_image }}
+  DOCKER_IMAGE: ${{ secrets.REGISTRY_ECR }}/${{ inputs.image_repository }}
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      image_by_environment: ${{ steps.setup.outputs.image_by_environment }}
+    steps:
+      - name: Set outputs
+        id: setup
+        run: |
+          TAG="$( echo "${GITHUB_REF}" | cut -d'/' -f3 )"
+          if grep -qs -e '^.*.*-develop' <<< "${TAG}" ; then
+            echo "Found environment: DEVELOP - ${TAG}"
+            echo "MANIFESTS_ENVIRONMENT=develop" | tee "${GITHUB_OUTPUT}"
+            export "MANIFESTS_ENVIRONMENT=develop"
+          elif grep -qs -e '^.*.*-staging' <<< "${TAG}" ; then
+            echo "Found environment: STAGING - ${TAG}"
+            echo "MANIFESTS_ENVIRONMENT=staging" | tee -a "${GITHUB_OUTPUT}"
+            export "MANIFESTS_ENVIRONMENT=staging"
+          elif grep -qs -e '^.*.*' <<< "${TAG}" ; then
+            echo "No environment found, assuming: PRODUCTION - ${TAG}"
+            echo "MANIFESTS_ENVIRONMENT=production" | tee -a "${GITHUB_OUTPUT}"
+            export "MANIFESTS_ENVIRONMENT=production"
+          else
+            echo 'Not a valid tag. Skipping...'
+            exit 1
+          fi
+          if [ "${{ inputs.image_tag_latest_by_environment }}" = "true" ] ; then
+            echo "image_by_environment=type=raw,latest-${MANIFESTS_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
+          fi
+
   build_and_push:
-    runs-on: ubuntu-22.04
+    needs:
+      - setup
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(inputs.image_arch) }}
+    runs-on: ${{ matrix.runner }}
     outputs:
       version: ${{ steps.meta.outputs.version }}
     steps:
+      - name: Set variables
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" | tee -a "${GITHUB_ENV}"
+
       - name: Check out the repo
         uses: actions/checkout@v4
 
@@ -50,36 +144,116 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKER_IMAGE }}
-          tags: type=ref,event=tag
-          flavor: latest=false
+          tags: |
+            ${{ inputs.image_tags }}
+            ${{ needs.setup.outputs.image_by_environment }}
+          flavor: |
+            latest=${{ inputs.image_latest }}
+            prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
+
+      - name: Login to Registry
+        uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ${{ secrets.REGISTRY_ECR }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Docker Image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          file: ${{ inputs.dockerfile }}
+          context: ${{ inputs.build_context }}
+          build-args: ${{ inputs.build_args }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: ${{ steps.matrix.platform }}
+          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs:
+      - setup
+      - build_and_push
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Registry
         uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: ${{ secrets.REGISTRY_ECR }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_TOKEN }}
 
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          file: ${{ inputs.dockerfile }}
-          context: .
-          labels: ${{ steps.meta.outputs.labels }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            ${{ inputs.image_tags }}
+            ${{ needs.setup.outputs.image_by_environment }}
+          flavor: |
+            latest=${{ inputs.image_latest }}
+            prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
+
+#      - name: Create manifest list and push
+#        working-directory: ${{ runner.temp }}/digests
+#        run: |
+#          docker buildx imagetools create -t "${{ env.IMAGE_TAG }}" \
+#            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect image
+        working-directory: ${{ runner.temp }}/digests
+        if: inputs.debug == 'true'
+        run: |
+          for x in $(jq -cr '.tags | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON"); do
+            echo docker buildx imagetools inspect "${x}"
+            docker buildx imagetools inspect "${x}"
+          done
 
   deploy_manifest:
+    if: inputs.target_repository == 'true'
     env:
       MANIFESTS_APPLICATION: ${{ inputs.target_application }}
       MANIFESTS_REPOSITORY: ${{ inputs.target_repository }}
       MANIFESTS_PATCH_TARGET: ${{ inputs.target_patch_file }}
       MANIFESTS_REPOSITORY_BRANCH: ${{ inputs.target_repository_branch }}
-    needs: build_and_push
-    runs-on: ubuntu-22.04
+    needs: merge
+    #runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Check out Kubernetes Manifests
         uses: actions/checkout@v3
@@ -92,7 +266,7 @@ jobs:
       - name: Update image on deployment
         working-directory: kubernetes-manifests/${{ env.MANIFESTS_APPLICATION }}
         env:
-          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
+          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ inputs.image_tag_prefix }}${{ needs.build_and_push.outputs.version }}
         run: |
           which jq > /dev/null 2>&1 || ( sudo apt update; sudo apt install -y jq )
 
@@ -105,7 +279,7 @@ jobs:
           }
 
           MANIFESTS_ENV_TARGET=$(echo ${{ needs.build_and_push.outputs.version }} | grep -Eo 'staging|develop' || echo 'production')
-          
+
           echo "Target environment: ${MANIFESTS_ENV_TARGET}"
 
           if [ ! -d "${MANIFESTS_ENV_TARGET}" ] || [ ! -r "${MANIFESTS_ENV_TARGET}/kustomization.yaml" ] || [ ! -r "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}" ]; then
