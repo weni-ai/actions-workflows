@@ -212,6 +212,7 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         run: |
           for x in $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON"); do
+            echo docker buildx imagetools inspect "${{ env.DOCKER_IMAGE }}:${x}"
             docker buildx imagetools inspect "${{ env.DOCKER_IMAGE }}:${x}"
           done
 
