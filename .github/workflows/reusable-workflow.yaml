@@ -282,8 +282,7 @@ jobs:
           else
             CURRENT_IMAGE=$(
               cat "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}" \
-                | jq -r '.[] | select(.path == "/spec/template/spec/containers/0/image") \
-                | .value'
+                | jq -r '.[] | select(.path == "/spec/template/spec/containers/0/image") | .value'
             )
             CURRENT_VERSION=$(extver "${CURRENT_IMAGE}")
             TARGET_VERSION=$(extver "${{ env.IMAGE_TAG }}")
