@@ -112,8 +112,8 @@ jobs:
           #push: true
           #tags: ${{ steps.meta.outputs.tags }}
           platforms: ${{ steps.matrix.platform }}
-          #outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          #outputs: type=image,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
