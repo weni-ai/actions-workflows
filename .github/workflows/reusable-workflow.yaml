@@ -251,7 +251,9 @@ jobs:
       MANIFESTS_REPOSITORY: ${{ inputs.target_repository }}
       MANIFESTS_PATCH_TARGET: ${{ inputs.target_patch_file }}
       MANIFESTS_REPOSITORY_BRANCH: ${{ inputs.target_repository_branch }}
-    needs: merge
+    needs:
+      - merge
+      - build_and_push
     #runs-on: ubuntu-22.04
     runs-on: ubuntu-latest
     steps:
@@ -278,7 +280,9 @@ jobs:
             [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
           }
 
-          MANIFESTS_ENV_TARGET=$(echo ${{ needs.build_and_push.outputs.version }} | grep -Eo 'staging|develop' || echo 'production')
+          MANIFESTS_ENV_TARGET=$(
+            echo ${{ needs.build_and_push.outputs.version }} | grep -Eo 'staging|develop' || echo 'production'
+          )
 
           echo "Target environment: ${MANIFESTS_ENV_TARGET}"
 
@@ -286,7 +290,11 @@ jobs:
             echo "${MANIFESTS_ENV_TARGET}, ${MANIFESTS_ENV_TARGET}/kustomization.yaml, or ${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}: Not readable, or neither one of those exists"
             exit 1
           else
-            CURRENT_IMAGE=$(cat "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}" | jq -r '.[] | select(.path == "/spec/template/spec/containers/0/image") | .value')
+            CURRENT_IMAGE=$(
+              cat "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}" \
+                | jq -r '.[] | select(.path == "/spec/template/spec/containers/0/image") \
+                | .value'
+            )
             CURRENT_VERSION=$(extver "${CURRENT_IMAGE}")
             TARGET_VERSION=$(extver "${{ env.IMAGE_TAG }}")
 
@@ -296,7 +304,9 @@ jobs:
             echo "  Target version: ${TARGET_VERSION}"
 
             if verlte "${CURRENT_VERSION}" "${TARGET_VERSION}"; then
-              NEW_CONFIG=$(jq --arg imageTag "${{ env.IMAGE_TAG }}" '(.. | select(.path == "/spec/template/spec/containers/0/image")?) += {value: $imageTag }' "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}")
+              NEW_CONFIG=$(
+                jq --arg imageTag "${{ env.IMAGE_TAG }}" '(.. | select(.path == "/spec/template/spec/containers/0/image")?) += {value: $imageTag }' "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}"
+              )
               echo "New configuration:"
               echo "${NEW_CONFIG}" | tee "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}"
             else
