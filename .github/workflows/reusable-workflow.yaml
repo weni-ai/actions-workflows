@@ -49,6 +49,10 @@ on:
         required: false
         type: string
         default: ""
+      build_context:
+        required: false
+        type: string
+        default: "."
       debug:
         required: false
         type: string
@@ -58,18 +62,21 @@ on:
         type: string
         default: Dockerfile
       target_application:
-        required: true
+        required: false
         type: string
+        default: ""
       target_repository:
-        required: true
+        required: false
         type: string
+        default: ""
       target_repository_branch:
         required: false
         type: string
-        default: main
+        default: "main"
       target_patch_file:
-        required: true
+        required: false
         type: string
+        default: "deployment.json"
     secrets:
       REGISTRY_ECR:
         required: false
@@ -120,11 +127,6 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJson(inputs.image_arch) }}
-        #include:
-        #  - runner: ubuntu-latest
-        #    platform: linux/amd64
-        #  - runner: ubuntu-24.04-arm
-        #    platform: linux/arm64
     runs-on: ${{ matrix.runner }}
     outputs:
       version: ${{ steps.meta.outputs.version }}
@@ -165,7 +167,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           file: ${{ inputs.dockerfile }}
-          context: .
+          context: ${{ inputs.build_context }}
           build-args: ${{ inputs.build_args }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ steps.matrix.platform }}
@@ -243,6 +245,7 @@ jobs:
           done
 
   deploy_manifest:
+    if: inputs.target_repository == 'true'
     env:
       MANIFESTS_APPLICATION: ${{ inputs.target_application }}
       MANIFESTS_REPOSITORY: ${{ inputs.target_repository }}
