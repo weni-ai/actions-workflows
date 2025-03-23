@@ -258,7 +258,8 @@ jobs:
       - name: Update image on deployment
         working-directory: kubernetes-manifests/${{ env.MANIFESTS_APPLICATION }}
         env:
-          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ inputs.image_tag_prefix }}${{ needs.build_and_push.outputs.version }}
+          #IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ inputs.image_tag_prefix }}${{ needs.build_and_push.outputs.version }}
+          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
         run: |
           which jq > /dev/null 2>&1 || ( sudo apt update; sudo apt install -y jq )
 
