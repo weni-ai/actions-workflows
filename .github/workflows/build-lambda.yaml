@@ -170,7 +170,9 @@ jobs:
         with:
           file: ${{ inputs.dockerfile }}
           context: ${{ inputs.build_context }}
-          build-args: ${{ inputs.build_args }}
+          build-args: |
+            ${{ inputs.build_args }}
+            PLATFORM_PAIR=${{ steps.matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ steps.matrix.platform }}
           outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
