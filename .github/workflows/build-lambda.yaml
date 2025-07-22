@@ -282,7 +282,7 @@ jobs:
             exit 1
           fi
 
-          ENVIRONMENT_ONE=$(
+          export ENVIRONMENT_ONE=$(
             yq '.workspaces | keys | .[] ' -r < one.yaml \
               | grep ${{needs.build_and_push.outputs.ENVIRONMENT}} \
               | head -n1
