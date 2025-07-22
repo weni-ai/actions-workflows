@@ -269,7 +269,10 @@ jobs:
         env:
           IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
         run: |
-          set -xv
+          if [ "${{ inputs.debug }}" = "true" ] ; then
+            set -xv
+          fi
+
           which jq > /dev/null 2>&1 || ( sudo apt update; sudo apt install -y jq )
 
           extver() {
