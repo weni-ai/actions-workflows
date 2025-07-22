@@ -314,7 +314,7 @@ jobs:
               echo 'New configurations:'
               new_configuration=$(
                 yq \
-                  '.workspaces."'"${ENVIRONMENT_ONE}"'".lambda."${APPLICATION_NAME}".image = "'"${{env.IMAGE_TAG}}"'"' \
+                  '.workspaces."'"${ENVIRONMENT_ONE}"'".lambda."'"${APPLICATION_NAME}"'".image = "'"${{env.IMAGE_TAG}}"'"' \
                   --output-format=yaml < one.yaml
               )
               echo "${new_configuration}"
