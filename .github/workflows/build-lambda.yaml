@@ -266,6 +266,7 @@ jobs:
         env:
           IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
         run: |
+          set -xv
           which jq > /dev/null 2>&1 || ( sudo apt update; sudo apt install -y jq )
 
           extver() {
@@ -289,7 +290,7 @@ jobs:
 
           for APPLICATION_NAME in ${{ inputs.target_application }} ; do
             OLD_IMAGE=$(
-              cat "infra-weni/one.yaml" \
+              cat "one.yaml" \
                 | yq '.workspaces.'"${ENVIRONMENT_ONE}"'.lambda."'"${APPLICATION_NAME}"'".image' -r
             )
             OLD_VERSION=$(
