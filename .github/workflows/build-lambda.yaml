@@ -69,7 +69,7 @@ on:
       target_repository:
         required: false
         type: string
-        default: ""
+        default: "infra-weni-lambda"
       target_repository_branch:
         required: false
         type: string
