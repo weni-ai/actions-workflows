@@ -53,6 +53,10 @@ on:
         required: false
         type: string
         default: ""
+      default_environment:
+        required: false
+        type: string
+        default: "production"
       dockerfile:
         required: false
         type: string
@@ -105,9 +109,9 @@ jobs:
             echo "MANIFESTS_ENVIRONMENT=staging" | tee -a "${GITHUB_OUTPUT}"
             export "MANIFESTS_ENVIRONMENT=staging"
           elif grep -qs -e '^.*.*' <<< "${TAG}" ; then
-            echo "No environment found, assuming: PRODUCTION - ${TAG}"
-            echo "MANIFESTS_ENVIRONMENT=production" | tee -a "${GITHUB_OUTPUT}"
-            export "MANIFESTS_ENVIRONMENT=production"
+            echo "No environment found, assuming: ${{ inputs.default_environment }} - ${TAG}"
+            echo "MANIFESTS_ENVIRONMENT=${{ inputs.default_environment }}" | tee -a "${GITHUB_OUTPUT}"
+            export "MANIFESTS_ENVIRONMENT=${{ inputs.default_environment }}"
           else
             echo 'Not a valid tag. Skipping...'
             exit 1
