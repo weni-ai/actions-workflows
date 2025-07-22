@@ -1,0 +1,330 @@
+name: Build Lambda in Shared (Push Tag)
+
+on:
+  workflow_call:
+    inputs:
+      image_arch:
+        required: false
+        type: string
+        default: |
+          [
+            {
+              "platform": "linux/arm64",
+              "runner": "ubuntu-24.04-arm"
+            },
+            {
+              "platform": "linux/amd64",
+              "runner": "ubuntu-latest"
+            }
+          ]
+      image_repository:
+        required: false
+        type: string
+        default: "lambda"
+      image_tags:
+        required: false
+        type: string
+        default: |
+          type=ref,event=tag
+      image_tag_latest_by_environment:
+        required: false
+        type: string
+        default: "false"
+      image_tag_prefix:
+        required: false
+        type: string
+        default: ""
+      image_tag_prefix_onlatest:
+        required: false
+        type: string
+        default: "false"
+      image_latest:
+        required: false
+        type: string
+        default: "false"
+      build_args:
+        required: false
+        type: string
+        default: ""
+      build_context:
+        required: false
+        type: string
+        default: "."
+      debug:
+        required: false
+        type: string
+        default: ""
+      default_environment:
+        required: false
+        type: string
+        default: "production"
+      dockerfile:
+        required: false
+        type: string
+        default: Dockerfile
+      target_application:
+        required: true
+        type: string
+        #default: ""
+      target_repository:
+        required: false
+        type: string
+        default: ""
+      target_repository_branch:
+        required: false
+        type: string
+        default: "main"
+      target_patch_file:
+        required: false
+        type: string
+        default: "deployment.json"
+    secrets:
+      REGISTRY_ECR:
+        required: false
+      REGISTRY_USERNAME:
+        required: true
+      REGISTRY_TOKEN:
+        required: true
+      DEVOPS_GITHUB_PERMANENT_TOKEN:
+        required: true
+
+env:
+  DOCKER_IMAGE: ${{ secrets.REGISTRY_ECR }}/${{ inputs.image_repository }}
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      image_by_environment: ${{ steps.setup.outputs.image_by_environment }}
+    steps:
+      - name: Set outputs
+        id: setup
+        run: |
+          TAG="$( echo "${GITHUB_REF}" | cut -d'/' -f3 )"
+          if grep -qs -e '^.*.*-develop' <<< "${TAG}" ; then
+            echo "Found environment: DEVELOP - ${TAG}"
+            echo "MANIFESTS_ENVIRONMENT=develop" | tee "${GITHUB_OUTPUT}"
+            export "MANIFESTS_ENVIRONMENT=develop"
+          elif grep -qs -e '^.*.*-staging' <<< "${TAG}" ; then
+            echo "Found environment: STAGING - ${TAG}"
+            echo "MANIFESTS_ENVIRONMENT=staging" | tee -a "${GITHUB_OUTPUT}"
+            export "MANIFESTS_ENVIRONMENT=staging"
+          elif grep -qs -e '^.*.*' <<< "${TAG}" ; then
+            echo "No environment found, assuming: ${{ inputs.default_environment }} - ${TAG}"
+            echo "MANIFESTS_ENVIRONMENT=${{ inputs.default_environment }}" | tee -a "${GITHUB_OUTPUT}"
+            export "MANIFESTS_ENVIRONMENT=${{ inputs.default_environment }}"
+          else
+            echo 'Not a valid tag. Skipping...'
+            exit 1
+          fi
+          if [ "${{ inputs.image_tag_latest_by_environment }}" = "true" ] ; then
+            echo "image_by_environment=type=raw,latest-${MANIFESTS_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
+          fi
+
+  build_and_push:
+    needs:
+      - setup
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(inputs.image_arch) }}
+    runs-on: ${{ matrix.runner }}
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Set variables
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" | tee -a "${GITHUB_ENV}"
+
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            ${{ inputs.image_tags }}
+            ${{ needs.setup.outputs.image_by_environment }}
+          flavor: |
+            latest=${{ inputs.image_latest }}
+            prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
+
+      - name: Login to Registry
+        uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ${{ secrets.REGISTRY_ECR }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Docker Image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          file: ${{ inputs.dockerfile }}
+          context: ${{ inputs.build_context }}
+          build-args: ${{ inputs.build_args }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: ${{ steps.matrix.platform }}
+          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs:
+      - setup
+      - build_and_push
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Registry
+        uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ${{ secrets.REGISTRY_ECR }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            ${{ inputs.image_tags }}
+            ${{ needs.setup.outputs.image_by_environment }}
+          flavor: |
+            latest=${{ inputs.image_latest }}
+            prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect image
+        working-directory: ${{ runner.temp }}/digests
+        if: inputs.debug == 'true'
+        run: |
+          for x in $(jq -cr '.tags | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON"); do
+            echo docker buildx imagetools inspect "${x}"
+            docker buildx imagetools inspect "${x}"
+          done
+
+  deploy_manifest:
+    if: inputs.target_repository != ''
+    env:
+      TERRAFORM_APPLICATION: ${{ inputs.target_application }}
+      TERRAFORM_REPOSITORY: ${{ inputs.target_repository }}
+      TERRAFORM_PATCH_TARGET: ${{ inputs.target_patch_file }}
+      TERRAFORM_REPOSITORY_BRANCH: ${{ inputs.target_repository_branch }}
+    needs:
+      - setup
+      - merge
+      - build_and_push
+    #runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Kubernetes Manifests
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.TERRAFORM_REPOSITORY_BRANCH }}
+          repository: ${{ env.TERRAFORM_REPOSITORY }}
+          token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
+          path: ./infra-weni-terraform/
+
+      - name: Update image on deployment
+        working-directory: infra-weni-terraform/
+        env:
+          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
+        run: |
+          which jq > /dev/null 2>&1 || ( sudo apt update; sudo apt install -y jq )
+
+          extver() {
+            echo "$1" | sed s'/^.*[v:-]\([0-9]*\.[0-9]*\.[0-9]*\).*$/\1/'g | head -n1
+          }
+
+          verlte() {
+            [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
+          }
+
+          if [ ! -r "one.yaml" ] ; then
+            echo "one.yaml: Not readable, or neither one of those exists"
+            exit 1
+          fi
+
+          ENVIRONMENT_ONE=$(
+            yq '.workspaces | keys | .[] ' -r < one.yaml \
+              | grep ${{needs.build_and_push.outputs.ENVIRONMENT}} \
+              | head -n1
+          )
+
+          for APPLICATION_NAME in ${{ inputs.target_application }} ; do
+            OLD_IMAGE=$(
+              cat "infra-weni/one.yaml" \
+                | yq '.workspaces.'"${ENVIRONMENT_ONE}"'.lambda."'"${APPLICATION_NAME}"'".image' -r
+            )
+            OLD_VERSION=$(
+              echo "${OLD_IMAGE}" \
+                | sed s'/^.*[v:-]\([0-9]*\.[0-9]*\.[0-9]*\).*$/\1/'g \
+                | head -n1
+            )
+
+            echo "Target environment: ${}"
+
+            echo "Replacing the following image:"
+            echo "  Image: ${DOCKER_IMAGE%%:*}"
+            echo "  Current version: ${OLD_VERSION}"
+            echo "  Target version: ${{ needs.build_and_push.outputs.version }}"
+
+            echo "Old image version to compare: ${OLD_VERSION}<=${{ needs.build_and_push.outputs.version }}"
+            if verlte "${OLD_VERSION}" "${{ needs.build_and_push.outputs.version }}" || [[ ! "${OLD_VERSION}" =~ [0-9]+\.[0-9]+\.[0-9]+ ]] ; then
+              echo 'New configurations:'
+              new_configuration=$(
+                yq \
+                  '.workspaces."'"${ENVIRONMENT_ONE}"'".lambda."${APPLICATION_NAME}".image = "'"${{env.IMAGE_TAG}}"'"' \
+                  --output-format=yaml < one.yaml
+              )
+              echo "${new_configuration}"
+              echo "${new_configuration}" > "one.yaml"
+            else
+              echo "Version in file is greater than build, skipping update yaml"
+            fi
+          done
+
+      - name: Commit & Push changes
+        uses: actions-js/push@master
+        with:
+          github_token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
+          repository: ${{ env.TERRAFORM_REPOSITORY }}
+          directory: ./infra-weni-terraform/
+          branch: ${{ env.TERRAFORM_REPOSITORY_BRANCH }}
+          message: "From ${{ github.workflow }}"
