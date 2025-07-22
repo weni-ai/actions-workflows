@@ -300,7 +300,7 @@ jobs:
                 | head -n1
             )
 
-            echo "Target environment: ${}"
+            echo "Target environment: ${{needs.setup.outputs.environment}}"
 
             echo "Replacing the following image:"
             echo "  Image: ${DOCKER_IMAGE%%:*}"
