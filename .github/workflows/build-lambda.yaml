@@ -284,7 +284,7 @@ jobs:
 
           export ENVIRONMENT_ONE=$(
             yq '.workspaces | keys | .[] ' -r < one.yaml \
-              | grep ${{needs.build_and_push.outputs.ENVIRONMENT}} \
+              | grep ${{needs.setup.outputs.ENVIRONMENT}} \
               | head -n1
           )
 
