@@ -175,6 +175,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           provenance: false # fix
+          sbom: false
           file: ${{ inputs.dockerfile }}
           context: ${{ inputs.build_context }}
           build-args: |
