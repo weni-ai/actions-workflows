@@ -152,8 +152,8 @@ jobs:
           flavor: |
             latest=${{ inputs.image_latest }}
             prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
-        env:
-          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        #env:
+        #  DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
 
       - name: Login to Registry
         uses: docker/login-action@v3
@@ -230,8 +230,8 @@ jobs:
           flavor: |
             latest=${{ inputs.image_latest }}
             prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
-        env:
-          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        #env:
+        #  DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
