@@ -181,7 +181,7 @@ jobs:
             ${{ inputs.build_args }}
             PLATFORM_PAIR=${{ env.PLATFORM_PAIR }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          labels: ${{ steps.meta.outputs.labels }}
+          #labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
