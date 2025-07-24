@@ -74,10 +74,6 @@ on:
         required: false
         type: string
         default: "main"
-      target_patch_file:
-        required: false
-        type: string
-        default: "deployment.json"
     secrets:
       REGISTRY_ECR:
         required: false
@@ -270,7 +266,6 @@ jobs:
     env:
       TERRAFORM_APPLICATION: ${{ inputs.target_application }}
       TERRAFORM_REPOSITORY: ${{ inputs.target_repository }}
-      TERRAFORM_PATCH_TARGET: ${{ inputs.target_patch_file }}
       TERRAFORM_REPOSITORY_BRANCH: ${{ inputs.target_repository_branch }}
     needs:
       - setup
