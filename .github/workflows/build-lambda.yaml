@@ -197,6 +197,7 @@ jobs:
           mkdir -p ${{ runner.temp }}/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
+          docker pull "${{ env.SOURCE_IMAGE }}"
           docker tag "${{ env.SOURCE_IMAGE }}" "${{ env.TARGET_IMAGE }}"
           docker push "${{ env.TARGET_IMAGE }}"
 
