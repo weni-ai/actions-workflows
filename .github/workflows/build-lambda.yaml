@@ -290,7 +290,8 @@ jobs:
       - name: Update image on deployment
         working-directory: infra-weni-terraform/
         env:
-          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}-${{ fromJson(inputs.image_arch)[0].platform }}
+          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
+          IMAGE_ARCH: ${{ fromJson(inputs.image_arch)[0].platform }}
         run: |
           if [ "${{ inputs.debug }}" = "true" ] ; then
             set -xv
@@ -340,7 +341,7 @@ jobs:
               echo 'New configurations:'
               new_configuration=$(
                 yq \
-                  '.workspaces."'"${ENVIRONMENT_ONE}"'".lambda."'"${APPLICATION_NAME}"'".image = "'"${{env.IMAGE_TAG}}"'"' \
+                  '.workspaces."'"${ENVIRONMENT_ONE}"'".lambda."'"${APPLICATION_NAME}"'".image = "'"${{env.IMAGE_TAG}}-${IMAGE_ARCH//\//-}"'"' \
                   --output-format=yaml < one.yaml
               )
               echo "${new_configuration}"
