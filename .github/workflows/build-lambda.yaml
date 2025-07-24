@@ -175,22 +175,30 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           provenance: false # fix
-          sbom: false
+          #sbom: false
           file: ${{ inputs.dockerfile }}
           context: ${{ inputs.build_context }}
           build-args: |
             ${{ inputs.build_args }}
             PLATFORM_PAIR=${{ env.PLATFORM_PAIR }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          #labels: ${{ steps.meta.outputs.labels }}
+          labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
-      - name: Export digest
+      - name: Export digest and push tag
+        env:
+          SOURCE_IMAGE: "${{ env.DOCKER_IMAGE }}:${{ steps.build.outputs.digest }}"
+          TARGET_IMAGE: "${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}-${{ matrix.platform }}"
         run: |
+          if [ "${{ inputs.debug }}" = "true" ] ; then
+            set -xv
+          fi
           mkdir -p ${{ runner.temp }}/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
+          docker tag "${{ env.SOURCE_IMAGE }}" "${{ env.TARGET_IMAGE }}"
+          docker push "${{ env.TARGET_IMAGE }}"
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
@@ -241,6 +249,9 @@ jobs:
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
+          if [ "${{ inputs.debug }}" = "true" ] ; then
+            set -xv
+          fi
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
 
@@ -278,7 +289,7 @@ jobs:
       - name: Update image on deployment
         working-directory: infra-weni-terraform/
         env:
-          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
+          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}-${{ fromJson(inputs.image_arch)[0].platform }}
         run: |
           if [ "${{ inputs.debug }}" = "true" ] ; then
             set -xv
