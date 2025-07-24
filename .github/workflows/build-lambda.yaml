@@ -188,7 +188,7 @@ jobs:
 
       - name: Export digest and push tag
         env:
-          SOURCE_IMAGE: "${{ env.DOCKER_IMAGE }}:${{ steps.build.outputs.digest }}"
+          SOURCE_IMAGE: "${{ env.DOCKER_IMAGE }}@${{ steps.build.outputs.digest }}"
           TARGET_IMAGE: "${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}-${{ matrix.platform }}"
         run: |
           if [ "${{ inputs.debug }}" = "true" ] ; then
