@@ -32,11 +32,32 @@ on:
       - '*.*.*'
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      repository_name: ${{ steps.setup.outputs.repository_name }}
+    steps:
+      - name: Setup outputs
+        id: setup
+        run: |
+          {
+            echo "repository_name=${GITHUB_REPOSITORY#$GITHUB_REPOSITORY_OWNER/}"
+          } | tee -a "${GITHUB_OUTPUT}"
+
+          {
+            echo "### Workflow Outputs"
+            echo "| Variable        | Value           |"
+            echo "| --------------- | --------------- |"
+            echo "| repository_name | Repository name |"
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
+
   call-workflow:
     uses: weni-ai/actions-workflows/.github/workflows/build-lambda.yaml@main
+    needs:
+      - setup
     with:
-      target_application: "lambda-test lambda-test2"
-      image_tag_prefix: lambda-test-
+      target_application: "${{ needs.setup.outputs.repository_name }}"
+      image_tag_prefix: "${{ needs.setup.outputs.repository_name }}-"
 
     secrets: inherit
 
