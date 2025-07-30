@@ -353,4 +353,4 @@ jobs:
           repository: ${{ env.TERRAFORM_REPOSITORY }}
           directory: ./infra-weni-terraform/
           branch: ${{ env.TERRAFORM_REPOSITORY_BRANCH }}
-          message: "From ${{ github.workflow }}"
+          message: "From ${{env.GITHUB_REPOSITORY}}: ${{ github.workflow }}"
