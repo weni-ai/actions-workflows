@@ -22,7 +22,7 @@ The action aims to simplify the deployment pipeline by handling the complexities
 Include a workflow file in your repository. Below is an example configuration:
 
 ```yaml
-name: Build Lambda ${LAMBDA_NAME}(Push Tag)
+name: Build lambda image and deploy(Push Tag)
 
 on:
   push:
