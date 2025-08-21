@@ -1,4 +1,4 @@
-name: Build Lambda in Shared (Push Tag)
+name: Build lambda, push to registry and deploy
 
 on:
   workflow_call:
@@ -353,4 +353,4 @@ jobs:
           repository: ${{ env.TERRAFORM_REPOSITORY }}
           directory: ./infra-weni-terraform/
           branch: ${{ env.TERRAFORM_REPOSITORY_BRANCH }}
-          message: "From ${{env.GITHUB_REPOSITORY}}: ${{ github.workflow }}"
+          message: "From ${{github.repository}}: ${{ github.workflow }}"
