@@ -88,8 +88,6 @@ on:
     secrets:
       ROLE_ARN:
         required: false
-        type: string
-        default: ""
       REGISTRY_ECR:
         required: false
       REGISTRY_USERNAME:
