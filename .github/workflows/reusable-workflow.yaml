@@ -91,9 +91,9 @@ on:
       REGISTRY_ECR:
         required: false
       REGISTRY_USERNAME:
-        required: true
+        required: false
       REGISTRY_TOKEN:
-        required: true
+        required: false
       DEVOPS_GITHUB_PERMANENT_TOKEN:
         required: true
 
@@ -105,6 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_by_environment: ${{ steps.setup.outputs.image_by_environment }}
+      use_role: ${{ steps.setup.outputs.USE_ROLE }}
     steps:
       - name: Set outputs
         id: setup
@@ -125,6 +126,9 @@ jobs:
           else
             echo 'Not a valid tag. Skipping...'
             exit 1
+          fi
+          if [ "${{ secrets.ROLE_ARN }}" ] ; then
+            echo "USE_ROLE=true" | tee -a "${GITHUB_OUTPUT}"
           fi
           if [ "${{ inputs.image_tag_latest_by_environment }}" = "true" ] ; then
             echo "image_by_environment=type=raw,latest-${MANIFESTS_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
@@ -170,13 +174,13 @@ jobs:
 
       - name: Login to Registry with role
         uses: docker/login-action@v3
-        if: github.event_name != 'pull_request' && secrets.ROLE_ARN != ''
+        if: github.event_name != 'pull_request' && needs.setup.outputs.use_role == 'true'
         with:
           registry: ${{ secrets.REGISTRY_ECR }}
 
       - name: Login to Registry with AK and SK
         uses: docker/login-action@v3
-        if: github.event_name != 'pull_request' && secrets.ROLE_ARN == ''
+        if: github.event_name != 'pull_request' && needs.setup.outputs.use_role != 'true'
         with:
           registry: ${{ secrets.REGISTRY_ECR }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -253,13 +257,13 @@ jobs:
 
       - name: Login to Registry with role
         uses: docker/login-action@v3
-        if: github.event_name != 'pull_request' && secrets.ROLE_ARN != ''
+        if: github.event_name != 'pull_request' && needs.setup.outputs.use_role == 'true'
         with:
           registry: ${{ secrets.REGISTRY_ECR }}
 
       - name: Login to Registry with AK and SK
         uses: docker/login-action@v3
-        if: github.event_name != 'pull_request' && secrets.ROLE_ARN == ''
+        if: github.event_name != 'pull_request' && needs.setup.outputs.use_role != 'true'
         with:
           registry: ${{ secrets.REGISTRY_ECR }}
           username: ${{ secrets.REGISTRY_USERNAME }}
