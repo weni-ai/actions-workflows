@@ -170,9 +170,15 @@ jobs:
           role-to-assume: ${{ inputs.aws_role_arn }}
           aws-region: ${{ inputs.aws_region }}
 
-      - name: Login to Registry
+      - name: Login to Registry with role
         uses: docker/login-action@v3
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && inputs.aws_role_arn != ''
+        with:
+          registry: ${{ secrets.REGISTRY_ECR }}
+
+      - name: Login to Registry with AK and SK
+        uses: docker/login-action@v3
+        if: github.event_name != 'pull_request' && inputs.aws_role_arn == ''
         with:
           registry: ${{ secrets.REGISTRY_ECR }}
           username: ${{ secrets.REGISTRY_USERNAME }}
