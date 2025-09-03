@@ -149,6 +149,7 @@ jobs:
         run: |
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" | tee -a "${GITHUB_ENV}"
+          echo "DIGEST_NAME=${DOCKER_IMAGE//\//-}-${platform//\//-}" | tee -a "${GITHUB_ENV}"
 
       - name: Check out the repo
         uses: actions/checkout@v4
@@ -229,7 +230,7 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ env.DOCKER_IMAGE }}-${{ env.PLATFORM_PAIR }}
+          name: digests-${{ env.DIGEST_NAME }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -244,7 +245,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-${{ env.DOCKER_IMAGE }}-*
+          pattern: digests-${{ env.DIGEST_NAME }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
