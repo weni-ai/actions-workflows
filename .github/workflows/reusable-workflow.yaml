@@ -169,6 +169,8 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         if: needs.setup.outputs.use_role == 'true'
         with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
@@ -252,6 +254,8 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         if: needs.setup.outputs.use_role == 'true'
         with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
