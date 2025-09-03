@@ -167,7 +167,7 @@ jobs:
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
-        if: secrets.ROLE_ARN != ''
+        if: needs.setup.outputs.use_role == 'true'
         with:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
@@ -250,7 +250,7 @@ jobs:
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
-        if: secrets.ROLE_ARN != ''
+        if: needs.setup.outputs.use_role == 'true'
         with:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
