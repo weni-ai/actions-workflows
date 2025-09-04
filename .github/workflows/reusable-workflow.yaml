@@ -379,7 +379,7 @@ jobs:
         working-directory: ./deploy-repository/${{ env.DEPLOY_APPLICATION }}
         env:
           IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
-          IMAGE_ARCH: ${{ fromJson(inputs.image_arch)[0].platform }}
+          IMAGE_ARCH: ${{ fromJson(needs.setup.outputs.image_arch)[0].platform }}
         run: |
           if [ "${{ inputs.debug }}" = "true" ] ; then
             set -xv
@@ -433,7 +433,7 @@ jobs:
         working-directory: ./deploy-repository/
         env:
           IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
-          IMAGE_ARCH: ${{ fromJson(inputs.image_arch)[0].platform }}
+          IMAGE_ARCH: ${{ fromJson(needs.setup.outputs.image_arch)[0].platform }}
         run: |
           if [ "${{ inputs.debug }}" = "true" ] ; then
             set -xv
