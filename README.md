@@ -132,7 +132,7 @@ jobs:
 | `image_tag_prefix_onlatest` | String | If `"true"`, add prefix to latest image. Defaults to `"false"` |
 | `image_tags` | List/CSV | Tags to be generated. Defaults to `"type=ref,event=tag"` |
 | `target_application` | String | Target lambda to be modified in terraform repository. Can be a list with spaces. |
-| `target_repository` | String | Repository to be updated when a image is generated. Defaults to `"weni-ai/infra-weni-lambda"` |
+| `target_repository` | String | Repository to be updated when a image is generated. |
 | `target_repository_branch` | String | `target_repository` to be modified. Defaults to `main`. |
 
 ### Secrets
