@@ -92,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_by_environment: ${{ steps.setup.outputs.image_by_environment }}
-      environment: ${{ steps.setup.outputs.ENVIRONMENT }}
+      environment: ${{ steps.setup.outputs.environment }}
     steps:
       - name: Set outputs
         id: setup

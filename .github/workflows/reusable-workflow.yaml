@@ -73,10 +73,6 @@ on:
         required: false
         type: string
         default: ""
-      deploy_type:
-        required: false
-        type: string
-        default: "kubernetes"
       target_repository_branch:
         required: false
         type: string
@@ -113,7 +109,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_by_environment: ${{ steps.setup.outputs.image_by_environment }}
-      environment: ${{ steps.setup.outputs.ENVIRONMENT }}
       use_role: ${{ steps.setup.outputs.USE_ROLE }}
       digests_prefix: ${{ steps.setup.outputs.DIGESTS_PREFIX }}
     steps:
@@ -144,16 +139,6 @@ jobs:
             echo "image_by_environment=type=raw,latest-${DEPLOY_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
           fi
           echo "DIGESTS_PREFIX=digests-$( echo "${DOCKER_IMAGE}" | tr './' '-' )" | tee -a "${GITHUB_OUTPUT}"
-
-          {
-            echo "### Workflow Outputs"
-            echo "| Variable             | Description     |"
-            echo "| -------------------- | --------------- |"
-            echo "| digests_prefix       | Prefix used in digests artifact |"
-            echo "| environment          | Enviroment identifier to build and/or deploy. Based on tags. |"
-            echo "| image_by_environment | Extra images to build based on enviroment |"
-            echo "| use_role             | If true, use role for AWS access |"
-          } | tee -a "${GITHUB_STEP_SUMMARY}"
 
   build_and_push:
     needs:
@@ -324,7 +309,7 @@ jobs:
             docker buildx imagetools inspect "${x}"
           done
 
-  deploy:
+  deploy_manifest:
     if: inputs.target_repository != ''
     env:
       DEPLOY_APPLICATION: ${{ inputs.target_application }}
@@ -362,18 +347,19 @@ jobs:
         env:
           AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
 
-      - name: Check out deploy repository
+      - name: Check out Kubernetes Manifests
         uses: actions/checkout@v3
         with:
           ref: ${{ env.DEPLOY_REPOSITORY_BRANCH }}
           repository: ${{ env.DEPLOY_REPOSITORY }}
+          #token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
           token: ${{ steps.set-vcs-token.outputs.VCS_TOKEN }}
           path: ./deploy-repository/
 
-      - name: Update image on kubernetes manifests
-        if: inputs.deploy_type == 'kubernetes'
+      - name: Update image on deployment
         working-directory: ./deploy-repository/${{ env.DEPLOY_APPLICATION }}
         env:
+          #IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ inputs.image_tag_prefix }}${{ needs.build_and_push.outputs.version }}
           IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
           IMAGE_ARCH: ${{ fromJson(inputs.image_arch)[0].platform }}
         run: |
@@ -424,77 +410,13 @@ jobs:
             fi
           fi
 
-      - name: Update image on terraform one.yaml
-        if: inputs.deploy_type == 'terraform'
-        working-directory: ./deploy-repository/
-        env:
-          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
-          IMAGE_ARCH: ${{ fromJson(inputs.image_arch)[0].platform }}
-        run: |
-          if [ "${{ inputs.debug }}" = "true" ] ; then
-            set -xv
-          fi
-
-          which jq > /dev/null 2>&1 || ( sudo apt update; sudo apt install -y jq )
-
-          extver() {
-            echo "$1" | sed s'/^.*[v:-]\([0-9]*\.[0-9]*\.[0-9]*\).*$/\1/'g | head -n1
-          }
-
-          verlte() {
-            [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
-          }
-
-          if [ ! -r "one.yaml" ] ; then
-            echo "one.yaml: Not readable, or neither one of those exists"
-            exit 1
-          fi
-
-          export ENVIRONMENT_ONE=$(
-            yq '.workspaces | keys | .[] ' -r < one.yaml \
-              | fgrep '${{needs.setup.outputs.environment}}' \
-              | head -n1
-          )
-
-          for APPLICATION_NAME in ${{ inputs.target_application }} ; do
-            OLD_IMAGE=$(
-              cat "one.yaml" \
-                | yq '.workspaces.'"${ENVIRONMENT_ONE}"'.lambda."'"${APPLICATION_NAME}"'".image' -r
-            )
-            OLD_VERSION=$(
-              echo "${OLD_IMAGE}" \
-                | sed s'/^.*[v:-]\([0-9]*\.[0-9]*\.[0-9]*\).*$/\1/'g \
-                | head -n1
-            )
-
-            echo "Target environment: ${{needs.setup.outputs.environment}}"
-
-            echo "Replacing the following image:"
-            echo "  Image: ${DOCKER_IMAGE%%:*}"
-            echo "  Current version: ${OLD_VERSION}"
-            echo "  Target version: ${{ needs.build_and_push.outputs.version }}"
-
-            echo "Old image version to compare: ${OLD_VERSION}<=${{ needs.build_and_push.outputs.version }}"
-            if verlte "${OLD_VERSION}" "${{ needs.build_and_push.outputs.version }}" || [[ ! "${OLD_VERSION}" =~ [0-9]+\.[0-9]+\.[0-9]+ ]] ; then
-              echo 'New configurations:'
-              new_configuration=$(
-                yq \
-                  '.workspaces."'"${ENVIRONMENT_ONE}"'".lambda."'"${APPLICATION_NAME}"'".image = "'"${{env.IMAGE_TAG}}-${IMAGE_ARCH//\//-}"'"' \
-                  --output-format=yaml < one.yaml \
-                  | sed s'/!!merge //'g
-              )
-              echo "${new_configuration}"
-              echo "${new_configuration}" > "one.yaml"
-            else
-              echo "Version in file is greater than build, skipping update yaml"
-            fi
-          done
-
       - name: Commit & Push changes
         uses: actions-js/push@master
         with:
+          #github_token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
           github_token: ${{ steps.set-vcs-token.outputs.VCS_TOKEN }}
           repository: ${{ env.DEPLOY_REPOSITORY }}
           directory: ./deploy-repository/
           branch: ${{ env.DEPLOY_REPOSITORY_BRANCH }}
+          #message: "From ${{ github.workflow }}"
           message: "From ${{github.repository}}: ${{ github.workflow }}"
