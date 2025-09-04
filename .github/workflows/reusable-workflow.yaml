@@ -85,6 +85,10 @@ on:
         required: false
         type: string
         default: "us-east-1"
+      aws_ssm_name:
+        required: false
+        type: string
+        default: "/cloud/github/TOKEN"
     secrets:
       ROLE_ARN:
         required: false
@@ -114,16 +118,16 @@ jobs:
           TAG="$( echo "${GITHUB_REF}" | cut -d'/' -f3 )"
           if grep -qs -e '^.*.*-develop' <<< "${TAG}" ; then
             echo "Found environment: DEVELOP - ${TAG}"
-            echo "MANIFESTS_ENVIRONMENT=develop" | tee "${GITHUB_OUTPUT}"
-            export "MANIFESTS_ENVIRONMENT=develop"
+            echo "DEPLOY_ENVIRONMENT=develop" | tee "${GITHUB_OUTPUT}"
+            export "DEPLOY_ENVIRONMENT=develop"
           elif grep -qs -e '^.*.*-staging' <<< "${TAG}" ; then
             echo "Found environment: STAGING - ${TAG}"
-            echo "MANIFESTS_ENVIRONMENT=staging" | tee -a "${GITHUB_OUTPUT}"
-            export "MANIFESTS_ENVIRONMENT=staging"
+            echo "DEPLOY_ENVIRONMENT=staging" | tee -a "${GITHUB_OUTPUT}"
+            export "DEPLOY_ENVIRONMENT=staging"
           elif grep -qs -e '^.*.*' <<< "${TAG}" ; then
             echo "No environment found, assuming: ${{ inputs.default_environment }} - ${TAG}"
-            echo "MANIFESTS_ENVIRONMENT=${{ inputs.default_environment }}" | tee -a "${GITHUB_OUTPUT}"
-            export "MANIFESTS_ENVIRONMENT=${{ inputs.default_environment }}"
+            echo "DEPLOY_ENVIRONMENT=${{ inputs.default_environment }}" | tee -a "${GITHUB_OUTPUT}"
+            export "DEPLOY_ENVIRONMENT=${{ inputs.default_environment }}"
           else
             echo 'Not a valid tag. Skipping...'
             exit 1
@@ -132,9 +136,9 @@ jobs:
             echo "USE_ROLE=true" | tee -a "${GITHUB_OUTPUT}"
           fi
           if [ "${{ inputs.image_tag_latest_by_environment }}" = "true" ] ; then
-            echo "image_by_environment=type=raw,latest-${MANIFESTS_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
+            echo "image_by_environment=type=raw,latest-${DEPLOY_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
           fi
-          echo "DIGESTS_PREFIX=digests-${DOCKER_IMAGE//\//-}" | tee -a "${GITHUB_OUTPUT}"
+          echo "DIGESTS_PREFIX=digests-$( echo "${DOCKER_IMAGE}" | tr './' '-' )" | tee -a "${GITHUB_OUTPUT}"
 
   build_and_push:
     needs:
@@ -176,13 +180,13 @@ jobs:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
-      - name: Login to Registry with role
+      - name: Login to Registry with aws role
         uses: docker/login-action@v3
         if: github.event_name != 'pull_request' && needs.setup.outputs.use_role == 'true'
         with:
           registry: ${{ secrets.REGISTRY_ECR }}
 
-      - name: Login to Registry with AK and SK
+      - name: Login to Registry with login and password
         uses: docker/login-action@v3
         if: github.event_name != 'pull_request' && needs.setup.outputs.use_role != 'true'
         with:
@@ -308,10 +312,10 @@ jobs:
   deploy_manifest:
     if: inputs.target_repository != ''
     env:
-      MANIFESTS_APPLICATION: ${{ inputs.target_application }}
-      MANIFESTS_REPOSITORY: ${{ inputs.target_repository }}
-      MANIFESTS_PATCH_TARGET: ${{ inputs.target_patch_file }}
-      MANIFESTS_REPOSITORY_BRANCH: ${{ inputs.target_repository_branch }}
+      DEPLOY_APPLICATION: ${{ inputs.target_application }}
+      DEPLOY_REPOSITORY: ${{ inputs.target_repository }}
+      DEPLOY_PATCH_TARGET: ${{ inputs.target_patch_file }}
+      DEPLOY_REPOSITORY_BRANCH: ${{ inputs.target_repository_branch }}
     needs:
       - setup
       - merge
@@ -319,19 +323,40 @@ jobs:
     #runs-on: ubuntu-22.04
     runs-on: ubuntu-latest
     steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        if: needs.setup.outputs.use_role == 'true'
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ secrets.ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Set VCS token
+        id: set-vcs-token
+        run: |
+          echo "VCS_TOKEN=$(
+            aws get-parameter --with-decryption \
+              --name ${{ inputs.aws_ssm_name }}
+          )" >> "${GITHUB_OUTPUT}"
+        env:
+          AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
+
       - name: Check out Kubernetes Manifests
         uses: actions/checkout@v3
         with:
-          ref: ${{ env.MANIFESTS_REPOSITORY_BRANCH }}
-          repository: ${{ env.MANIFESTS_REPOSITORY }}
-          token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
-          path: ./kubernetes-manifests/
+          ref: ${{ env.DEPLOY_REPOSITORY_BRANCH }}
+          repository: ${{ env.DEPLOY_REPOSITORY }}
+          #token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
+          token: ${{ steps.set-vcs-token.outputs.VCS_TOKEN }}
+          path: ./deploy-repository/
 
       - name: Update image on deployment
-        working-directory: kubernetes-manifests/${{ env.MANIFESTS_APPLICATION }}
+        working-directory: ./deploy-repository/${{ env.DEPLOY_APPLICATION }}
         env:
           #IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ inputs.image_tag_prefix }}${{ needs.build_and_push.outputs.version }}
           IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
+          IMAGE_ARCH: ${{ fromJson(inputs.image_arch)[0].platform }}
         run: |
           if [ "${{ inputs.debug }}" = "true" ] ; then
             set -xv
@@ -347,18 +372,18 @@ jobs:
             [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
           }
 
-          MANIFESTS_ENV_TARGET=$(
+          DEPLOY_ENV_TARGET=$(
             echo ${{ needs.build_and_push.outputs.version }} | grep -Eo 'staging|develop' || echo 'production'
           )
 
-          echo "Target environment: ${MANIFESTS_ENV_TARGET}"
+          echo "Target environment: ${DEPLOY_ENV_TARGET}"
 
-          if [ ! -d "${MANIFESTS_ENV_TARGET}" ] || [ ! -r "${MANIFESTS_ENV_TARGET}/kustomization.yaml" ] || [ ! -r "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}" ]; then
-            echo "${MANIFESTS_ENV_TARGET}, ${MANIFESTS_ENV_TARGET}/kustomization.yaml, or ${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}: Not readable, or neither one of those exists"
+          if [ ! -d "${DEPLOY_ENV_TARGET}" ] || [ ! -r "${DEPLOY_ENV_TARGET}/kustomization.yaml" ] || [ ! -r "${DEPLOY_ENV_TARGET}/${{ env.DEPLOY_PATCH_TARGET }}" ]; then
+            echo "${DEPLOY_ENV_TARGET}, ${DEPLOY_ENV_TARGET}/kustomization.yaml, or ${DEPLOY_ENV_TARGET}/${{ env.DEPLOY_PATCH_TARGET }}: Not readable, or neither one of those exists"
             exit 1
           else
             CURRENT_IMAGE=$(
-              cat "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}" \
+              cat "${DEPLOY_ENV_TARGET}/${{ env.DEPLOY_PATCH_TARGET }}" \
                 | jq -r '.[] | select(.path == "/spec/template/spec/containers/0/image") | .value'
             )
             CURRENT_VERSION=$(extver "${CURRENT_IMAGE}")
@@ -371,10 +396,10 @@ jobs:
 
             if verlte "${CURRENT_VERSION}" "${TARGET_VERSION}"; then
               NEW_CONFIG=$(
-                jq --arg imageTag "${{ env.IMAGE_TAG }}" '(.. | select(.path == "/spec/template/spec/containers/0/image")?) += {value: $imageTag }' "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}"
+                jq --arg imageTag "${{ env.IMAGE_TAG }}" '(.. | select(.path == "/spec/template/spec/containers/0/image")?) += {value: $imageTag }' "${DEPLOY_ENV_TARGET}/${{ env.DEPLOY_PATCH_TARGET }}"
               )
               echo "New configuration:"
-              echo "${NEW_CONFIG}" | tee "${MANIFESTS_ENV_TARGET}/${{ env.MANIFESTS_PATCH_TARGET }}"
+              echo "${NEW_CONFIG}" | tee "${DEPLOY_ENV_TARGET}/${{ env.DEPLOY_PATCH_TARGET }}"
             else
               echo "Version in file is greater than build, skipping update yaml"
             fi
@@ -383,8 +408,10 @@ jobs:
       - name: Commit & Push changes
         uses: actions-js/push@master
         with:
-          github_token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
-          repository: ${{ env.MANIFESTS_REPOSITORY }}
-          directory: ./kubernetes-manifests/
-          branch: ${{ env.MANIFESTS_REPOSITORY_BRANCH }}
-          message: "From ${{ github.workflow }}"
+          #github_token: ${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}
+          github_token: ${{ steps.set-vcs-token.outputs.VCS_TOKEN }}
+          repository: ${{ env.DEPLOY_REPOSITORY }}
+          directory: ./deploy-repository/
+          branch: ${{ env.DEPLOY_REPOSITORY_BRANCH }}
+          #message: "From ${{ github.workflow }}"
+          message: "From ${{github.repository}}: ${{ github.workflow }}"
