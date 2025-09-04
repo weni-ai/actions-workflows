@@ -106,6 +106,7 @@ jobs:
     outputs:
       image_by_environment: ${{ steps.setup.outputs.image_by_environment }}
       use_role: ${{ steps.setup.outputs.USE_ROLE }}
+      digests_prefix: ${{ steps.setup.outputs.DIGESTS_PREFIX }}
     steps:
       - name: Set outputs
         id: setup
@@ -133,6 +134,7 @@ jobs:
           if [ "${{ inputs.image_tag_latest_by_environment }}" = "true" ] ; then
             echo "image_by_environment=type=raw,latest-${MANIFESTS_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
           fi
+          echo "DIGESTS_PREFIX=digests-${DOCKER_IMAGE//\//-}" | tee -a "${GITHUB_OUTPUT}"
 
   build_and_push:
     needs:
@@ -149,7 +151,6 @@ jobs:
         run: |
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" | tee -a "${GITHUB_ENV}"
-          echo "DIGEST_NAME=${DOCKER_IMAGE//\//-}-${platform//\//-}" | tee -a "${GITHUB_ENV}"
 
       - name: Check out the repo
         uses: actions/checkout@v4
@@ -230,7 +231,7 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ env.DIGEST_NAME }}
+          name: ${{ needs.setup.outputs.digests_prefix }}-${{ env.PLATFORM_PAIR }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -245,7 +246,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-*
+          pattern: ${{ needs.setup.outputs.digests_prefix }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
