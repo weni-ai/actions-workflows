@@ -336,9 +336,13 @@ jobs:
         id: set-vcs-token
         run: |
           echo "VCS_TOKEN=$(
-            aws ssm get-parameter --with-decryption \
-              --name ${{ inputs.aws_ssm_name }} \
-              | jq -r .Parameter.Value
+            if [ "${{ needs.setup.outputs.use_role }}" = "true" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name ${{ inputs.aws_ssm_name }} \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}" ] ; then
+              echo "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
+            fi
           )" >> "${GITHUB_OUTPUT}"
         env:
           AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
