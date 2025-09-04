@@ -58,7 +58,7 @@ jobs:
     needs:
       - setup
     with:
-      deploy_type == 'terraform'
+      deploy_type: 'terraform'
       image_repository: 'lambda'
       target_repository: 'weni-ai/infra-weni-lambda'
       target_application: "${{ needs.setup.outputs.repository_name }}"
@@ -105,7 +105,7 @@ jobs:
     needs:
       - setup
     with:
-      deploy_type == 'kubernetes'
+      deploy_type: 'kubernetes'
       target_application: "${{ needs.setup.outputs.repository_name }}"
     secrets: inherit
 
@@ -116,7 +116,7 @@ jobs:
 
 | Name               | Type        | Description                                                                                                                                                                       |
 |--------------------|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `aws_ssm_name` | String | Optional. Parameter name to retrive VCS token |
+| `aws_ssm_name` | String | Optional. Parameter name to retrieve VCS token |
 | `aws_region` | String | Default to `us-east-1` |
 | `build_args` | String | Build arguments for docker build command. (e.g., `--build-arg foo=bar`) |
 | `build_context` | String | Directory used to build context of image |
