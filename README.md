@@ -54,7 +54,7 @@ jobs:
           } | tee -a "${GITHUB_STEP_SUMMARY}"
 
   call-workflow:
-    uses: weni-ai/actions-workflows/.github/workflows/build-lambda.yaml@main
+    uses: weni-ai/actions-workflows/.github/workflows/reusable-workflow.yaml@main
     needs:
       - setup
     with:
@@ -101,7 +101,7 @@ jobs:
           } | tee -a "${GITHUB_STEP_SUMMARY}"
 
   call-workflow:
-    uses: weni-ai/actions-workflows/.github/workflows/build-lambda.yaml@main
+    uses: weni-ai/actions-workflows/.github/workflows/reusable-workflow.yaml@main
     needs:
       - setup
     with:
