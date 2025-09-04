@@ -10,17 +10,7 @@ on:
       image_arch:
         required: false
         type: string
-        default: |
-          [
-            {
-              "platform": "linux/arm64",
-              "runner": "ubuntu-24.04-arm"
-            },
-            {
-              "platform": "linux/amd64",
-              "runner": "ubuntu-latest"
-            }
-          ]
+        default: ""
       image_repository:
         required: true
         type: string
@@ -116,6 +106,7 @@ jobs:
       environment: ${{ steps.setup.outputs.ENVIRONMENT }}
       use_role: ${{ steps.setup.outputs.USE_ROLE }}
       digests_prefix: ${{ steps.setup.outputs.DIGESTS_PREFIX }}
+      image_arch: ${{ steps.setup.outputs.image_arch }}
     steps:
       - name: Set outputs
         id: setup
@@ -137,13 +128,26 @@ jobs:
             echo 'Not a valid tag. Skipping...'
             exit 1
           fi
-          if [ "${{ secrets.ROLE_ARN }}" ] ; then
-            echo "USE_ROLE=true" | tee -a "${GITHUB_OUTPUT}"
-          fi
-          if [ "${{ inputs.image_tag_latest_by_environment }}" = "true" ] ; then
-            echo "image_by_environment=type=raw,latest-${DEPLOY_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
-          fi
-          echo "DIGESTS_PREFIX=digests-$( echo "${DOCKER_IMAGE}" | tr './' '-' )" | tee -a "${GITHUB_OUTPUT}"
+          {
+            if [ "${{ secrets.ROLE_ARN }}" ] ; then
+              echo "USE_ROLE=true" | tee -a "${GITHUB_OUTPUT}"
+            fi
+            if [ "${{ inputs.image_tag_latest_by_environment }}" = "true" ] ; then
+              echo "image_by_environment=type=raw,latest-${DEPLOY_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
+            fi
+            echo "DIGESTS_PREFIX=digests-$( echo "${DOCKER_IMAGE}" | tr './' '-' )" | tee -a "${GITHUB_OUTPUT}"
+            echo 'image_arch<<EOFenv'
+            if [ "${{ inputs.image_arch }}" = "" ] ; then
+              if [ "${{ github.repository_visibility }}" = "private" ] ; then
+                echo '[{"platform":"linux/arm64","runner":"ubuntu-latest"},{"platform":"linux/amd64","runner":"ubuntu-latest"}]'
+              else
+                echo '[{"platform":"linux/arm64","runner":"ubuntu-24.04-arm"},{"platform":"linux/amd64","runner":"ubuntu-latest"}]'
+              fi
+            else
+              echo '${{ inputs.image_arch }}'
+            fi
+            echo EOFenv
+          } | tee -a "${GITHUB_OUTPUT}"
 
           {
             echo "### Workflow Outputs"
