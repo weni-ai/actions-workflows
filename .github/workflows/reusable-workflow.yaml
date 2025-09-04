@@ -336,8 +336,9 @@ jobs:
         id: set-vcs-token
         run: |
           echo "VCS_TOKEN=$(
-            aws get-parameter --with-decryption \
-              --name ${{ inputs.aws_ssm_name }}
+            aws ssm get-parameter --with-decryption \
+              --name ${{ inputs.aws_ssm_name }} \
+              | jq -r .Parameter.Value
           )" >> "${GITHUB_OUTPUT}"
         env:
           AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
