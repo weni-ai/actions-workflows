@@ -165,7 +165,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(inputs.image_arch) }}
+        include: ${{ fromJson(needs.setup.outputs.image_arch) }}
     runs-on: ${{ matrix.runner }}
     outputs:
       version: ${{ steps.meta.outputs.version }}
