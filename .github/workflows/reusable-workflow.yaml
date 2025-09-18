@@ -103,7 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_by_environment: ${{ steps.setup.outputs.image_by_environment }}
-      environment: ${{ steps.setup.outputs.ENVIRONMENT }}
+      environment: ${{ steps.setup.outputs.DEPLOY_ENVIRONMENT }}
       use_role: ${{ steps.setup.outputs.USE_ROLE }}
       digests_prefix: ${{ steps.setup.outputs.DIGESTS_PREFIX }}
       image_arch: ${{ steps.setup.outputs.image_arch }}
