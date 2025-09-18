@@ -83,6 +83,13 @@ on:
         required: false
         type: string
         default: "/cloud/github/TOKEN"
+
+      # kludges
+      kludge_webapp_secret_enable:
+        required: false
+        type: boolean
+        default: false
+
     secrets:
       ROLE_ARN:
         required: false
@@ -107,9 +114,47 @@ jobs:
       use_role: ${{ steps.setup.outputs.USE_ROLE }}
       digests_prefix: ${{ steps.setup.outputs.DIGESTS_PREFIX }}
       image_arch: ${{ steps.setup.outputs.image_arch }}
+      build_args: ${{ steps.setup.outputs.build_args }}
     steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ env.use_role != '' }}
+        env:
+          use_role: ${{ secrets.ROLE_ARN }}
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ secrets.ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Set VCS token
+        id: set-vcs-token
+        run: |
+          cat<<<"VCS_TOKEN=$(
+            if [ "${{ secrets.ROLE_ARN }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_name }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}" ] ; then
+              cat<<<"${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
+            fi
+          )" >> "${GITHUB_OUTPUT}"
+        env:
+          AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
+
+      - name: Download webapp secret
+        uses: actions/checkout@master
+        if: inputs.kludge_webapp_secret_enable
+        with:
+          ref: main
+          repository: "weni-ai/webapp-secret"
+          token: "${{ steps.set-vcs-token.outputs.VCS_TOKEN }}"
+          path: ./webapp-secret/
+
       - name: Set outputs
         id: setup
+        env:
+          BUILD_ARGS: ${{ inputs.build_args }}
         run: |
           TAG="$( echo "${GITHUB_REF}" | cut -d'/' -f3 )"
           if grep -qs -e '^.*.*-develop' <<< "${TAG}" ; then
@@ -128,6 +173,7 @@ jobs:
             echo 'Not a valid tag. Skipping...'
             exit 1
           fi
+          export GITHUB_REPOSITORY_NAME="${GITHUB_REPOSITORY#$GITHUB_REPOSITORY_OWNER/}"
           {
             if [ "${{ secrets.ROLE_ARN }}" ] ; then
               echo "USE_ROLE=true" | tee -a "${GITHUB_OUTPUT}"
@@ -147,6 +193,16 @@ jobs:
               echo '${{ inputs.image_arch }}'
             fi
             echo EOFenv
+
+            # Set build args
+            echo 'BUILD_ARGS<<EOFenv'
+            if [ -r "webapp-secret/${GITHUB_REPOSITORY_NAME}/${DEPLOY_ENVIRONMENT}/env" ] ; then
+              cat "webapp-secret/${GITHUB_REPOSITORY_NAME}/${DEPLOY_ENVIRONMENT}/env"
+            fi
+            if [ "${BUILD_ARGS}" ] ; then
+              cat <<<"${BUILD_ARGS}"
+            fi
+            echo EOFenv
           } | tee -a "${GITHUB_OUTPUT}"
 
           {
@@ -157,6 +213,7 @@ jobs:
             echo "| environment          | Enviroment identifier to build and/or deploy. Based on tags. |"
             echo "| image_by_environment | Extra images to build based on enviroment |"
             echo "| use_role             | If true, use role for AWS access |"
+            echo "| build_args           | build args to be used when building the container |"
           } | tee -a "${GITHUB_STEP_SUMMARY}"
 
   build_and_push:
@@ -229,7 +286,7 @@ jobs:
           file: ${{ inputs.dockerfile }}
           context: ${{ inputs.build_context }}
           build-args: |
-            ${{ inputs.build_args }}
+            ${{ needs.setup.outputs.build_args }}
             PLATFORM_PAIR=${{ env.PLATFORM_PAIR }}
           annotations: ${{ steps.meta.outputs.annotations }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -316,14 +373,14 @@ jobs:
           if [ "${{ inputs.debug }}" = "true" ] ; then
             set -xv
           fi
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "${DOCKER_METADATA_OUTPUT_JSON}") \
             $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
 
       - name: Inspect image
         working-directory: ${{ runner.temp }}/digests
         if: inputs.debug == 'true'
         run: |
-          for x in $(jq -cr '.tags | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON"); do
+          for x in $(jq -cr '.tags | join(" ")' <<< "${DOCKER_METADATA_OUTPUT_JSON}"); do
             echo docker buildx imagetools inspect "${x}"
             docker buildx imagetools inspect "${x}"
           done
@@ -357,10 +414,10 @@ jobs:
           echo "VCS_TOKEN=$(
             if [ "${{ needs.setup.outputs.use_role }}" = "true" ] ; then
               aws ssm get-parameter --with-decryption \
-                --name ${{ inputs.aws_ssm_name }} \
+                --name "${{ inputs.aws_ssm_name }}" \
                 | jq -r .Parameter.Value
             elif [ "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}" ] ; then
-              echo "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
+              cat<<<"${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
             fi
           )" >> "${GITHUB_OUTPUT}"
         env:

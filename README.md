@@ -134,6 +134,7 @@ jobs:
 | `target_application` | String | Target lambda to be modified in terraform repository. Can be a list with spaces. |
 | `target_repository` | String | Repository to be updated when a image is generated. |
 | `target_repository_branch` | String | `target_repository` to be modified. Defaults to `main`. |
+| `kludge_webapp_secret_enable` | Boolean | Enable get secrets from webapp-secret repository. Defaults to `false`. |
 
 ### Secrets
 
