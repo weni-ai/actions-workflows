@@ -93,7 +93,7 @@ on:
       REGISTRY_TOKEN:
         required: false
       DEVOPS_GITHUB_PERMANENT_TOKEN:
-        required: true
+        required: false
 
 env:
   DOCKER_IMAGE: ${{ secrets.REGISTRY_ECR }}/${{ inputs.image_repository }}
