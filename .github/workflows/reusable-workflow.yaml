@@ -199,9 +199,9 @@ jobs:
             if [ -r "webapp-secret/${GITHUB_REPOSITORY_NAME}/${DEPLOY_ENVIRONMENT}/env" ] ; then
               cat "webapp-secret/${GITHUB_REPOSITORY_NAME}/${DEPLOY_ENVIRONMENT}/env"
             fi
-            if [ "${BUILD_ARGS}" ] ; then
-              cat <<<"${BUILD_ARGS}"
-            fi
+            #if [ "${BUILD_ARGS}" ] ; then
+            #  cat <<<"${BUILD_ARGS}"
+            #fi
             echo EOFenv
           } | tee -a "${GITHUB_OUTPUT}"
 
@@ -286,8 +286,9 @@ jobs:
           file: ${{ inputs.dockerfile }}
           context: ${{ inputs.build_context }}
           build-args: |
-            ${{ needs.setup.outputs.build_args }}
             PLATFORM_PAIR=${{ env.PLATFORM_PAIR }}
+            ${{ needs.setup.outputs.build_args }}
+            ${{ inputs.build_args }}
           annotations: ${{ steps.meta.outputs.annotations }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ matrix.platform }}
