@@ -1,0 +1,26 @@
+name: 'Secret output'
+description: 'Allow outputs that contains secrets to be passed between jobs by encrypting them.'
+branding:
+  icon: 'shield'
+  color: 'white'
+inputs:
+  op:
+    required: true
+    description: "Operation to perform (encode or decode)"
+    default: "encode"
+  in:
+    required: true
+    description: "Input data"
+  secret:
+    required: false
+    description: "Secret to encrypt/decrypt data"
+outputs:
+  out:
+    description: "Result of encryption/decryption"
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    OPERATION: ${{ inputs.op }}
+    IN: ${{ inputs.in }}
+    SECRET: ${{ inputs.secret }}
