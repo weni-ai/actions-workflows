@@ -4,7 +4,7 @@ Central repository for GitHub Actions workflows and scripts.
 
 # Public Actions Available
 
-## reusable-workflow.yaml
+## .github/workflows/reusable-workflow.yaml
 
 This GitHub Action is designed to streamline the process of creating Docker images that will be used as base images for AWS Lambda functions and Kubernetes, pushing these images to Amazon Elastic Container Registry(ECR) and automatically upgrading new versions.
 
@@ -145,5 +145,98 @@ jobs:
 | `REGISTRY_ECR` | Registry URL. |
 | `REGISTRY_TOKEN` | Optional. Registry token/password |
 | `REGISTRY_USERNAME` | Optional. Registry username |
+
+## weni-ai/actions-workflows/secret-output
+
+This gitHub action encrypts or decrypts input data using a provided secret, allowing secure transmission between jobs. It accepts an operation type (encode/decode), input data, and an optional secret for encryption/decryption. The encrypted result is returned as the output.
+
+This is to solve the problem with github erase output between jobs.
+
+### How It Works
+
+1. **Obfuscate a secret output**: Use gpg to create a obfuscated output how cannot read in the logs.
+2. **Pass encrypted output as job output**: Use the obfuscated output as a job output.
+3. **Decrypt job output and use in another job**: Use the obfustated output after decrypt.
+
+### Usage
+
+Include a workflow file in your repository. You can use a secret value in input.secret, but if you like to use secretless, you can remove this option(remember to cleanup in the end).
+
+Below is an example:
+
+```yaml
+on: [push]
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    name: A job to test action to encode secret output
+    outputs:
+      out: ${{ steps.encode.outputs.out }}
+    steps:
+      - name: Cache secret
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache_secret/.token
+          key: token-secret-output
+
+      - name: Encode secret
+        uses: weni-ai/actions-workflows/secret-output@main
+        id: encode
+        with:
+          in: "A LONG DEPLOY SECRETKEY GENERATE IN A STEP"
+
+  another_job:
+    runs-on: ubuntu-latest
+    name: Another job how use a secret
+    needs:
+      - setup
+    steps:
+      - name: Cache secret
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache_secret/.token
+          key: token-secret-output
+
+      - name: Decode
+        uses: weni-ai/actions-workflows/secret-output@main
+        id: decode
+        with:
+          op: decode
+          in: ${{ needs.setup.outputs.out }}"
+
+      - name: IF Output decode is equal
+        run: |
+          if [ "${{ steps.decode.outputs.out }}" != "AAAAAAAA" ] ; then
+            echo "Diff in output"
+            exit 1
+          fi
+
+  cleanup:
+    runs-on: ubuntu-latest
+    needs:
+      - another_job
+    steps:
+      - name: Cache secret
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache_secret/.token
+          key: token-secret-output
+      - name: Cleanup Step
+        if: always()
+        uses: weni-ai/actions-workflows/secret-output@main
+        id: decode
+
+# vim: nu ts=2 fdm=indent et ft=yaml shiftwidth=2 softtabstop=2:
+```
+
+### Inputs
+
+| Name               | Type        | Description                                                                                                                                                                       |
+|--------------------|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `op` | String | Type of operation, can be `cleanup`, `decode` or `encode`. Defaults to `encode`. |
+| `in` | String | Input data. |
+| `secret` | String | Secret to encrypt/decrypt data. Optional if cache is used. |
+| `log_level` | String | Log level used in action, default to INFO. |
 
 [modeline]: # ( vim: set fenc=utf-8 spell spl=en: )

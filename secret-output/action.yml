@@ -1,22 +1,22 @@
 name: 'Secret output'
 description: 'Allow outputs that contains secrets to be passed between jobs by encrypting them.'
-branding:
-  icon: 'shield'
-  color: 'white'
+
 inputs:
   op:
-    required: true
+    required: false
     description: "Operation to perform (encode or decode)"
     default: "encode"
   in:
-    required: true
+    required: false
     description: "Input data"
   secret:
     required: false
     description: "Secret to encrypt/decrypt data"
+
 outputs:
   out:
     description: "Result of encryption/decryption"
+
 runs:
   using: 'docker'
   image: 'Dockerfile'
@@ -24,3 +24,6 @@ runs:
     OPERATION: ${{ inputs.op }}
     IN: ${{ inputs.in }}
     SECRET: ${{ inputs.secret }}
+    LOG_LEVEL: ${{ inputs.log_level }}
+
+# vim: nu ts=2 fdm=indent et ft=yaml shiftwidth=2 softtabstop=2:
