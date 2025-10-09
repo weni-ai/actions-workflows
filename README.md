@@ -15,11 +15,11 @@ The action aims to simplify the deployment pipeline by handling the complexities
 1. **Triggering the Action**: When a tag with a format is pushed, this GitHub Action will be triggered.
 2. **Docker Image Build**: The action uses Docker commands to build an image based on predefined Dockerfile and configuration settings.
 3. **Push to Registry**: After successful building, the image is pushed to your AWS ECR repository or another registry.
-4. **Version Upgrade for Deploy**: Automatically updates `infra-weni-lambda` or another `kubernetes-manifests` repository with the latest version of the Docker image.
+4. **Version Upgrade for Deploy**: Automatically updates `infra-weni-*` or another `kubernetes-manifests*` repository with the latest version of the Docker image.
 
 ### Usage
 
-Include a workflow file in your repository. Below is an example configuration for `infra-weni-lambda` or `kubernetes-manifests`:
+Include a workflow file in your repository. Below is an example configuration for `infra-weni-lambda` or `kubernetes-manifests*`:
 
 #### infra-weni-lambda
 
