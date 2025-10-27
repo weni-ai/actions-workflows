@@ -59,6 +59,10 @@ on:
         required: false
         type: string
         default: ""
+      target_application_directory_prefix:
+        required: false
+        type: string
+        default: ""
       target_repository:
         required: false
         type: string
@@ -447,7 +451,7 @@ jobs:
   deploy:
     if: inputs.target_repository != ''
     env:
-      DEPLOY_APPLICATION: ${{ inputs.target_application }}
+      DEPLOY_APPLICATION: ${{ inputs.target_application_directory_prefix }}${{ inputs.target_application }}
       DEPLOY_REPOSITORY: ${{ inputs.target_repository }}
       DEPLOY_PATCH_TARGET: ${{ inputs.target_patch_file }}
       DEPLOY_REPOSITORY_BRANCH: ${{ inputs.target_repository_branch }}
@@ -546,7 +550,7 @@ jobs:
 
       - name: Update image on terraform one.yaml
         if: inputs.deploy_type == 'terraform'
-        working-directory: ./deploy-repository/
+        working-directory: ./deploy-repository/${{ inputs.target_application_directory_prefix }}
         env:
           IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
           IMAGE_ARCH: ${{ fromJson(needs.setup.outputs.image_arch)[0].platform }}
