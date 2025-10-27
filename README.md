@@ -107,6 +107,7 @@ jobs:
     with:
       deploy_type: 'kubernetes'
       target_application: "${{ needs.setup.outputs.repository_name }}"
+      image_repository: "${{ needs.setup.outputs.repository_name }}"
     secrets: inherit
 
 # vim: nu ts=2 fdm=indent et ft=yaml shiftwidth=2 softtabstop=2:
