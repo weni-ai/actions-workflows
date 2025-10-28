@@ -136,6 +136,7 @@ jobs:
 | `target_application_directory_prefix` | String | Prefix used in target application directory. Use in applications with subdirectory. |
 | `target_repository` | String | Repository to be updated when a image is generated. |
 | `target_repository_branch` | String | `target_repository` to be modified. Defaults to `main`. |
+| `target_patch_file` | String | File to be updated the application version. Defaults to `deployment.json` for kubernetes. |
 | `kludge_webapp_secret_enable` | Boolean | Enable get secrets from webapp-secret repository. Defaults to `false`. |
 
 ### Secrets
