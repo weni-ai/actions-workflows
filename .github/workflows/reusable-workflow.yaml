@@ -605,7 +605,7 @@ jobs:
                 yq \
                   '.workspaces."'"${ENVIRONMENT_ONE}"'".lambda."'"${APPLICATION_NAME}"'" \
                   |= (.image = "'"${{env.IMAGE_TAG}}-${IMAGE_ARCH//\//-}"'" \
-                  | .architectures = ["'"${IMAGE_ARCH//linux\//}"'"]) \
+                  | .architectures = ["'"${IMAGE_ARCH//linux\//}"'"])' \
                   --output-format=yaml < one.yaml \
                   | sed s'/!!merge //'g
               )
