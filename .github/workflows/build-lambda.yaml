@@ -336,10 +336,7 @@ jobs:
               echo 'New configurations:'
               new_configuration=$(
                 yq \
-                  '.workspaces."'"${ENVIRONMENT_ONE}"'".lambda."'"${APPLICATION_NAME}"'" \
-                  |= (.image = "'"${{env.IMAGE_TAG}}-${IMAGE_ARCH//\//-}"'" \
-                  | .architectures = ["'"${IMAGE_ARCH//linux\//}"'"]) \
-                  --output-format=yaml < one.yaml \
+                  '.workspaces."'"${ENVIRONMENT_ONE}"'".lambda."'"${APPLICATION_NAME}"'".image = "'"${{env.IMAGE_TAG}}-${IMAGE_ARCH//\//-}"'"' \
                   | sed s'/!!merge //'g
               )
               echo "${new_configuration}"
