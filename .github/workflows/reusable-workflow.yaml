@@ -19,6 +19,18 @@ on:
         type: string
         default: |
           type=ref,event=tag
+      image_registry_url:
+        required: false
+        type: string
+        default: 'docker.io'
+      image_registry_user:
+        required: false
+        type: string
+        default: ''
+      image_registry_password:
+        required: false
+        type: string
+        default: ''
       image_tag_latest_by_environment:
         required: false
         type: string
@@ -120,7 +132,7 @@ jobs:
       image_arch: ${{ steps.setup.outputs.image_arch }}
       build_args: ${{ steps.setup.outputs.build_args }}
     steps:
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials from secret
         uses: aws-actions/configure-aws-credentials@v4
         if: ${{ env.use_role != '' }}
         env:
@@ -131,18 +143,74 @@ jobs:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
+      - name: Configure AWS Credentials from input
+        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ inputs.aws_role_arn != '' }}
+        env:
+          use_role: ${{ inputs.aws_role_arn }}
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+
       - name: Set VCS token
         id: set-vcs-token
         run: |
-          cat<<<"VCS_TOKEN=$(
-            if [ "${{ secrets.ROLE_ARN }}" ] ; then
+          VCS_TOKEN=$(
+            if [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
               aws ssm get-parameter --with-decryption \
                 --name "${{ inputs.aws_ssm_name }}" \
                 | jq -r .Parameter.Value
             elif [ "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}" ] ; then
               cat<<<"${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
             fi
-          )" >> "${GITHUB_OUTPUT}"
+          )"
+          REGISTRY_USERNAME=$(
+            if [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_registry_username }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.REGISTRY_USERNAME }}" ] ; then
+              cat<<<"${{ secrets.REGISTRY_USERNAME }}"
+            fi
+          )"
+          REGISTRY_PASSWORD=$(
+            if [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_registry_password }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.REGISTRY_TOKEN }}" ] ; then
+              cat<<<"${{ secrets.REGISTRY_TOKEN }}"
+            fi
+          )"
+          REGISTRY_URL=$(
+            if [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_registry_url }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.REGISTRY_ECR }}" ] ; then
+              cat<<<"${{ secrets.REGISTRY_ECR }}"
+            fi
+          )"
+          echo "::add-mask::${VCS_TOKEN}"
+          echo "::add-mask::${REGISTRY_URL}"
+          echo "::add-mask::${REGISTRY_USERNAME}"
+          echo "::add-mask::${REGISTRY_PASSWORD}"
+          {
+            echo 'VCS_TOKEN<<EOFenv'
+            cat<<<"${VCS_TOKEN}"
+            echo 'EOFenv'
+            echo 'REGISTRY_USERNAME<<EOFenv'
+            cat<<<"${REGISTRY_USERNAME}"
+            echo 'EOFenv'
+            echo 'REGISTRY_PASSWORD<<EOFenv'
+            cat<<<"${REGISTRY_PASSWORD}"
+            echo 'EOFenv'
+            echo 'REGISTRY_URL<<EOFenv'
+            cat<<<"${REGISTRY_URL}"
+            echo 'EOFenv'
+          } >> "${GITHUB_OUTPUT}"
         env:
           AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
 

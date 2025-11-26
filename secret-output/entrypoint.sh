@@ -78,10 +78,27 @@ case "${OPERATION}" in
 		} >> "${GITHUB_OUTPUT}"
 		#} | tee -a "${GITHUB_OUTPUT}"
 	;;
+	toml-decode)
+		result=$(
+			gpg --decrypt --quiet --batch --passphrase-file <(
+				get_secret
+			) --output - <(
+				base64 -d <<< "${IN}"
+			)
+		)
+		echo "::add-mask::${result}"
+		for toml_key in $( yq -p toml 'keys' -o csv | tr ', ' '\n' ) ; do
+			{
+				echo "${toml_key}<<EOFoutput"
+				yq -p toml ".${toml_key}" -r <<< "${result}"
+				echo 'EOFoutput'
+			} >> "${GITHUB_OUTPUT}"
+		done
+	;;
 	cleanup)
 		rm -rf "${CACHE_DIR}/.token"
 	;;
 	*)
-		echo $"op input can be only {encode|decode}"
+		echo $"op input can be only {encode|decode|toml-decode|cleanup}"
 		exit 1
 esac
