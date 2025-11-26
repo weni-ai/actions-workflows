@@ -88,6 +88,7 @@ case "${OPERATION}" in
 		)
 		echo "::add-mask::${result}"
 		for toml_key in $( yq -p toml 'keys' -o csv | tr ', ' '\n' ) ; do
+			#log "ITER ${toml_key}" 'DEBUG'
 			{
 				echo "${toml_key}<<EOFoutput"
 				yq -p toml ".${toml_key}" -r <<< "${result}"
