@@ -22,8 +22,9 @@ on:
       image_registry_url:
         required: false
         type: string
-        default: 'docker.io'
-      image_registry_user:
+        #default: 'docker.io'
+        default: ''
+      image_registry_username:
         required: false
         type: string
         default: ''
@@ -130,9 +131,6 @@ on:
       DEVOPS_GITHUB_PERMANENT_TOKEN:
         required: false
 
-env:
-  DOCKER_IMAGE: ${{ secrets.REGISTRY_ECR }}/${{ inputs.image_repository }}
-
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -180,7 +178,9 @@ jobs:
             fi
           )"
           REGISTRY_USERNAME=$(
-            if [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+            if [ "${{ inputs.image_registry_username }}" ] ; then
+              cat<<<"${{ inputs.image_registry_username }}"
+            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
               aws ssm get-parameter --with-decryption \
                 --name "${{ inputs.aws_ssm_registry_username }}" \
                 | jq -r .Parameter.Value
@@ -189,7 +189,9 @@ jobs:
             fi
           )"
           REGISTRY_PASSWORD=$(
-            if [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+            if [ "${{ inputs.image_registry_password }}" ] ; then
+              cat<<<"${{ inputs.image_registry_password }}"
+            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
               aws ssm get-parameter --with-decryption \
                 --name "${{ inputs.aws_ssm_registry_password }}" \
                 | jq -r .Parameter.Value
@@ -198,12 +200,14 @@ jobs:
             fi
           )"
           REGISTRY_URL=$(
-            if [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+            if [ "${{ inputs.image_registry_url }}" ] ; then
+              cat<<<"${{ inputs.image_registry_url }}"
+            elif [ "${{ secrets.REGISTRY_ECR }}" ] ; then
+              cat<<<"${{ secrets.REGISTRY_ECR }}"
+            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
               aws ssm get-parameter --with-decryption \
                 --name "${{ inputs.aws_ssm_registry_url }}" \
                 | jq -r .Parameter.Value
-            elif [ "${{ secrets.REGISTRY_ECR }}" ] ; then
-              cat<<<"${{ secrets.REGISTRY_ECR }}"
             fi
           )"
           IMAGE_URL="${REGISTRY_URL}/${{ inputs.image_repository }}"
@@ -275,7 +279,7 @@ jobs:
             if [ "${{ inputs.image_tag_latest_by_environment }}" = "true" ] ; then
               echo "image_by_environment=type=raw,latest-${DEPLOY_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
             fi
-            echo "DIGESTS_PREFIX=digests-$( echo "${DOCKER_IMAGE}" | tr './' '-' )" | tee -a "${GITHUB_OUTPUT}"
+            echo "DIGESTS_PREFIX=digests-$( echo "${{ steps.set-outputs.outputs.REGISTRY_URL }}" | tr './' '-' )"
             echo 'image_arch<<EOFenv'
             if [ "${{ inputs.image_arch }}" = "" ] ; then
               if [ "${{ github.repository_visibility }}" = "private" ] ; then
@@ -725,7 +729,7 @@ jobs:
             echo "Target environment: ${{needs.setup.outputs.environment}}"
 
             echo "Replacing the following image:"
-            echo "  Image: ${DOCKER_IMAGE%%:*}"
+            echo "  Image: ${IMAGE_TAG%%:*}"
             echo "  Current version: ${OLD_VERSION}"
             echo "  Target version: ${{ needs.build_and_push.outputs.version }}"
 
