@@ -12,10 +12,10 @@ function log(){
 	local log_priority=$2
 
 	# check if level exists
-	[[ ${levels[$log_priority]} ]] || return 1
+	[[ "${levels[$log_priority]}" ]] || return 1
 
 	# check if level is enough
-	(( ${levels[$log_priority]} < ${levels[$script_logging_level]} )) && return 0
+	(( "${levels[$log_priority]}" < "${levels[$script_logging_level]}" )) && return 0
 
 	echo "${log_message}" 1>&2
 }
