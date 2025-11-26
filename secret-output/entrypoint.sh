@@ -86,9 +86,14 @@ case "${OPERATION}" in
 				base64 -d <<< "${IN}"
 			)
 		)
-		echo "::add-mask::${result}"
-		for toml_key in $( yq -p toml 'keys' -o csv | tr ', ' '\n' ) ; do
+		#echo "::add-mask::${result}"
+		for toml_key in $( yq -p toml 'keys' -o csv <<< "${result}" | tr ', ' '\n' ) ; do
 			#log "ITER ${toml_key}" 'DEBUG'
+			while read -r line; do
+				echo "::add-mask::${line}"
+			done <<< "$(
+				yq -p toml ".${toml_key}" -r <<< "${result}"
+			)"
 			{
 				echo "${toml_key}<<EOFoutput"
 				yq -p toml ".${toml_key}" -r <<< "${result}"
