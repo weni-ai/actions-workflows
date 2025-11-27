@@ -322,7 +322,7 @@ jobs:
 
       - name: Encode secret toml
         uses: weni-ai/actions-workflows/secret-output@main
-        id: encode-output
+        id: set-outputs
         with:
           in: |-
             VCS_TOKEN = '${{ steps.set-outputs.outputs.VCS_TOKEN }}'
