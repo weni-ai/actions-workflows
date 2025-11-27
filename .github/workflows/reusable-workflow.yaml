@@ -784,6 +784,7 @@ jobs:
       - name: Cache secret
         uses: actions/cache@v4
         with:
+          save-always: true
           path: ${{ github.workspace }}/.cache_secret/.token
           key: token-secret-output
 
