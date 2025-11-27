@@ -141,7 +141,7 @@ jobs:
       digests_prefix: ${{ steps.setup.outputs.DIGESTS_PREFIX }}
       image_arch: ${{ steps.setup.outputs.image_arch }}
       build_args: ${{ steps.setup.outputs.build_args }}
-      encoded_outputs: ${{ steps.set-outputs.outputs.out }}
+      encoded_outputs: ${{ steps.encode-output.outputs.out }}
     steps:
       - name: Configure AWS Credentials from secret
         uses: aws-actions/configure-aws-credentials@v4
@@ -322,7 +322,7 @@ jobs:
 
       - name: Encode secret toml
         uses: weni-ai/actions-workflows/secret-output@main
-        id: set-outputs
+        id: encode-output
         with:
           in: |-
             VCS_TOKEN = '${{ steps.set-outputs.outputs.VCS_TOKEN }}'
