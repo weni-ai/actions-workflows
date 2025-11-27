@@ -353,7 +353,7 @@ jobs:
         id: decode
         with:
           op: toml-decode
-          in: "${{ needs.setup.outputs.encoded-outputs }}"
+          in: "${{ needs.setup.outputs.encoded_outputs }}"
 
       - name: Set variables
         run: |
@@ -520,7 +520,7 @@ jobs:
         id: decode
         with:
           op: toml-decode
-          in: "${{ needs.setup.outputs.encoded-outputs }}"
+          in: "${{ needs.setup.outputs.encoded_outputs }}"
 
       - name: Docker meta
         id: meta
@@ -610,7 +610,7 @@ jobs:
         id: decode
         with:
           op: toml-decode
-          in: "${{ needs.setup.outputs.encoded-outputs }}"
+          in: "${{ needs.setup.outputs.encoded_outputs }}"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
