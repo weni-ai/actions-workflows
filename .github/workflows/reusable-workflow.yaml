@@ -146,7 +146,7 @@ jobs:
     steps:
       - name: Configure AWS Credentials from secret
         uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ env.use_role != '' }}
+        if: secrets.ROLE_ARN != ''
         env:
           use_role: ${{ secrets.ROLE_ARN }}
         with:
@@ -157,7 +157,7 @@ jobs:
 
       - name: Configure AWS Credentials from input
         uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ inputs.aws_role_arn != '' }}
+        if: inputs.aws_role_arn != ''
         env:
           use_role: ${{ inputs.aws_role_arn }}
         with:
@@ -169,19 +169,26 @@ jobs:
       - name: Set outputs
         id: set-outputs
         run: |
+          ROLE_ARN=$(
+            if [ "${{ inputs.aws_role_arn }}" ] ; then
+              cat<<<"${{ inputs.aws_role_arn }}"
+            elif [ "${{ secrets.ROLE_ARN }}" ] ; then
+              cat<<<"${{ secrets.ROLE_ARN }}"
+            fi
+          )
           VCS_TOKEN=$(
-            if [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+            if [ "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}" ] ; then
+              cat<<<"${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
+            elif [ "${ROLE_ARN}" -a "${{ inputs.aws_ssm_vcs_token }}" ] ; then
               aws ssm get-parameter --with-decryption \
                 --name "${{ inputs.aws_ssm_vcs_token }}" \
                 | jq -r .Parameter.Value
-            elif [ "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}" ] ; then
-              cat<<<"${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
             fi
           )
           REGISTRY_USERNAME=$(
             if [ "${{ inputs.image_registry_username }}" ] ; then
               cat<<<"${{ inputs.image_registry_username }}"
-            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" -a "${{ inputs.aws_ssm_registry_username }}" ] ; then
+            elif [ "${ROLE_ARN}" -a "${{ inputs.aws_ssm_registry_username }}" ] ; then
               aws ssm get-parameter --with-decryption \
                 --name "${{ inputs.aws_ssm_registry_username }}" \
                 | jq -r .Parameter.Value
@@ -192,7 +199,7 @@ jobs:
           REGISTRY_PASSWORD=$(
             if [ "${{ inputs.image_registry_password }}" ] ; then
               cat<<<"${{ inputs.image_registry_password }}"
-            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+            elif [ "${ROLE_ARN}" -a "${{ inputs.aws_ssm_registry_password }}" ] ; then
               aws ssm get-parameter --with-decryption \
                 --name "${{ inputs.aws_ssm_registry_password }}" \
                 | jq -r .Parameter.Value
@@ -205,7 +212,7 @@ jobs:
               cat<<<"${{ inputs.image_registry_url }}"
             elif [ "${{ secrets.REGISTRY_ECR }}" ] ; then
               cat<<<"${{ secrets.REGISTRY_ECR }}"
-            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+            elif [ "${ROLE_ARN}" -a "${{ inputs.aws_ssm_registry_url }}" ] ; then
               aws ssm get-parameter --with-decryption \
                 --name "${{ inputs.aws_ssm_registry_url }}" \
                 | jq -r .Parameter.Value
@@ -213,11 +220,16 @@ jobs:
           )
           IMAGE_URL="${REGISTRY_URL}/${{ inputs.image_repository }}"
           echo "::add-mask::${VCS_TOKEN}"
+          echo "::add-mask::${ROLE_ARN}"
           echo "::add-mask::${REGISTRY_URL}"
           echo "::add-mask::${REGISTRY_USERNAME}"
           echo "::add-mask::${REGISTRY_PASSWORD}"
           echo "::add-mask::${IMAGE_URL}"
           {
+            echo 'ROLE_ARN<<EOFenv'
+            cat<<<"${ROLE_ARN}"
+            echo 'EOFenv'
+
             echo 'VCS_TOKEN<<EOFenv'
             cat<<<"${VCS_TOKEN}"
             echo 'EOFenv'
@@ -235,7 +247,7 @@ jobs:
             echo 'EOFenv'
 
             echo 'IMAGE_URL<<EOFenv'
-            cat<<<"${REGISTRY_URL}/${{ inputs.image_repository }}"
+            cat<<<"${IMAGE_URL}"
             echo 'EOFenv'
           } >> "${GITHUB_OUTPUT}"
         env:
