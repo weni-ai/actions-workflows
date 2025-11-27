@@ -12,10 +12,10 @@ function log(){
 	local log_priority=$2
 
 	# check if level exists
-	[[ ${levels[$log_priority]} ]] || return 1
+	[[ "${levels[$log_priority]}" ]] || return 1
 
 	# check if level is enough
-	(( ${levels[$log_priority]} < ${levels[$script_logging_level]} )) && return 0
+	(( "${levels[$log_priority]}" < "${levels[$script_logging_level]}" )) && return 0
 
 	echo "${log_message}" 1>&2
 }
@@ -78,10 +78,33 @@ case "${OPERATION}" in
 		} >> "${GITHUB_OUTPUT}"
 		#} | tee -a "${GITHUB_OUTPUT}"
 	;;
+	toml-decode)
+		result=$(
+			gpg --decrypt --quiet --batch --passphrase-file <(
+				get_secret
+			) --output - <(
+				base64 -d <<< "${IN}"
+			)
+		)
+		#echo "::add-mask::${result}"
+		for toml_key in $( yq -p toml 'keys' -o csv <<< "${result}" | tr ', ' '\n' ) ; do
+			#log "ITER ${toml_key}" 'DEBUG'
+			while read -r line; do
+				echo "::add-mask::${line}"
+			done <<< "$(
+				yq -p toml ".${toml_key}" -r <<< "${result}"
+			)"
+			{
+				echo "${toml_key}<<EOFoutput"
+				yq -p toml ".${toml_key}" -r <<< "${result}"
+				echo 'EOFoutput'
+			} >> "${GITHUB_OUTPUT}"
+		done
+	;;
 	cleanup)
 		rm -rf "${CACHE_DIR}/.token"
 	;;
 	*)
-		echo $"op input can be only {encode|decode}"
+		echo $"op input can be only {encode|decode|toml-decode|cleanup}"
 		exit 1
 esac

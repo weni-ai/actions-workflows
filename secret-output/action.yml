@@ -20,6 +20,8 @@ outputs:
 runs:
   using: 'docker'
   image: 'Dockerfile'
+  #post: 'clean'
+  #post-if: "success()"
   env:
     OPERATION: ${{ inputs.op }}
     IN: ${{ inputs.in }}

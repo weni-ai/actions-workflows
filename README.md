@@ -238,7 +238,7 @@ jobs:
 
 | Name               | Type        | Description                                                                                                                                                                       |
 |--------------------|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `op` | String | Type of operation, can be `cleanup`, `decode` or `encode`. Defaults to `encode`. |
+| `op` | String | Type of operation, can be `cleanup`, `decode`, `toml-decode` or `encode`. Defaults to `encode`. |
 | `in` | String | Input data. |
 | `secret` | String | Secret to encrypt/decrypt data. Optional if cache is used. |
 | `log_level` | String | Log level used in action, default to INFO. |

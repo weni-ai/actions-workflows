@@ -19,6 +19,19 @@ on:
         type: string
         default: |
           type=ref,event=tag
+      image_registry_url:
+        required: false
+        type: string
+        #default: 'docker.io'
+        default: ''
+      image_registry_username:
+        required: false
+        type: string
+        default: ''
+      image_registry_password:
+        required: false
+        type: string
+        default: ''
       image_tag_latest_by_environment:
         required: false
         type: string
@@ -83,10 +96,22 @@ on:
         required: false
         type: string
         default: "us-east-1"
-      aws_ssm_name:
+      aws_ssm_vcs_token:
         required: false
         type: string
         default: "/cloud/github/TOKEN"
+      aws_ssm_registry_username:
+        required: false
+        type: string
+        default: "/cloud/registry/USERNAME"
+      aws_ssm_registry_password:
+        required: false
+        type: string
+        default: "/cloud/registry/PASSWORD"
+      aws_ssm_registry_url:
+        required: false
+        type: string
+        default: "/cloud/registry/URL"
 
       # kludges
       kludge_webapp_secret_enable:
@@ -106,9 +131,6 @@ on:
       DEVOPS_GITHUB_PERMANENT_TOKEN:
         required: false
 
-env:
-  DOCKER_IMAGE: ${{ secrets.REGISTRY_ECR }}/${{ inputs.image_repository }}
-
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -119,8 +141,9 @@ jobs:
       digests_prefix: ${{ steps.setup.outputs.DIGESTS_PREFIX }}
       image_arch: ${{ steps.setup.outputs.image_arch }}
       build_args: ${{ steps.setup.outputs.build_args }}
+      encoded_outputs: ${{ steps.set-outputs.outputs.out }}
     steps:
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials from secret
         uses: aws-actions/configure-aws-credentials@v4
         if: ${{ env.use_role != '' }}
         env:
@@ -131,18 +154,89 @@ jobs:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
-      - name: Set VCS token
-        id: set-vcs-token
+      - name: Configure AWS Credentials from input
+        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ inputs.aws_role_arn != '' }}
+        env:
+          use_role: ${{ inputs.aws_role_arn }}
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Set outputs
+        id: set-outputs
         run: |
-          cat<<<"VCS_TOKEN=$(
-            if [ "${{ secrets.ROLE_ARN }}" ] ; then
+          VCS_TOKEN=$(
+            if [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
               aws ssm get-parameter --with-decryption \
-                --name "${{ inputs.aws_ssm_name }}" \
+                --name "${{ inputs.aws_ssm_vcs_token }}" \
                 | jq -r .Parameter.Value
             elif [ "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}" ] ; then
               cat<<<"${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
             fi
-          )" >> "${GITHUB_OUTPUT}"
+          )"
+          REGISTRY_USERNAME=$(
+            if [ "${{ inputs.image_registry_username }}" ] ; then
+              cat<<<"${{ inputs.image_registry_username }}"
+            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_registry_username }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.REGISTRY_USERNAME }}" ] ; then
+              cat<<<"${{ secrets.REGISTRY_USERNAME }}"
+            fi
+          )"
+          REGISTRY_PASSWORD=$(
+            if [ "${{ inputs.image_registry_password }}" ] ; then
+              cat<<<"${{ inputs.image_registry_password }}"
+            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_registry_password }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.REGISTRY_TOKEN }}" ] ; then
+              cat<<<"${{ secrets.REGISTRY_TOKEN }}"
+            fi
+          )"
+          REGISTRY_URL=$(
+            if [ "${{ inputs.image_registry_url }}" ] ; then
+              cat<<<"${{ inputs.image_registry_url }}"
+            elif [ "${{ secrets.REGISTRY_ECR }}" ] ; then
+              cat<<<"${{ secrets.REGISTRY_ECR }}"
+            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_registry_url }}" \
+                | jq -r .Parameter.Value
+            fi
+          )"
+          IMAGE_URL="${REGISTRY_URL}/${{ inputs.image_repository }}"
+          echo "::add-mask::${VCS_TOKEN}"
+          echo "::add-mask::${REGISTRY_URL}"
+          echo "::add-mask::${REGISTRY_USERNAME}"
+          echo "::add-mask::${REGISTRY_PASSWORD}"
+          echo "::add-mask::${IMAGE_URL}"
+          {
+            echo 'VCS_TOKEN<<EOFenv'
+            cat<<<"${VCS_TOKEN}"
+            echo 'EOFenv'
+
+            echo 'REGISTRY_USERNAME<<EOFenv'
+            cat<<<"${REGISTRY_USERNAME}"
+            echo 'EOFenv'
+
+            echo 'REGISTRY_PASSWORD<<EOFenv'
+            cat<<<"${REGISTRY_PASSWORD}"
+            echo 'EOFenv'
+
+            echo 'REGISTRY_URL<<EOFenv'
+            cat<<<"${REGISTRY_URL}"
+            echo 'EOFenv'
+
+            echo 'IMAGE_URL<<EOFenv'
+            cat<<<"${REGISTRY_URL}/${{ inputs.image_repository }}"
+            echo 'EOFenv'
+          } >> "${GITHUB_OUTPUT}"
         env:
           AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
 
@@ -152,7 +246,7 @@ jobs:
         with:
           ref: main
           repository: "weni-ai/webapp-secret"
-          token: "${{ steps.set-vcs-token.outputs.VCS_TOKEN }}"
+          token: "${{ steps.set-outputs.outputs.VCS_TOKEN }}"
           path: ./webapp-secret/
 
       - name: Set outputs
@@ -185,7 +279,7 @@ jobs:
             if [ "${{ inputs.image_tag_latest_by_environment }}" = "true" ] ; then
               echo "image_by_environment=type=raw,latest-${DEPLOY_ENVIRONMENT}" | tee -a "${GITHUB_OUTPUT}"
             fi
-            echo "DIGESTS_PREFIX=digests-$( echo "${DOCKER_IMAGE}" | tr './' '-' )" | tee -a "${GITHUB_OUTPUT}"
+            echo "DIGESTS_PREFIX=digests-$( echo "${{ steps.set-outputs.outputs.REGISTRY_URL }}" | tr './' '-' )"
             echo 'image_arch<<EOFenv'
             if [ "${{ inputs.image_arch }}" = "" ] ; then
               if [ "${{ github.repository_visibility }}" = "private" ] ; then
@@ -220,6 +314,23 @@ jobs:
             echo "| build_args           | build args to be used when building the container |"
           } | tee -a "${GITHUB_STEP_SUMMARY}"
 
+      - name: Cache secret
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache_secret/.token
+          key: token-secret-output
+
+      - name: Encode secret toml
+        uses: weni-ai/actions-workflows/secret-output@main
+        id: encode-output
+        with:
+          in: |
+            VCS_TOKEN = '${{ steps.set-outputs.outputs.VCS_TOKEN }}'
+            REGISTRY_URL = '${{ steps.set-outputs.outputs.REGISTRY_URL }}'
+            REGISTRY_USERNAME = '${{ steps.set-outputs.outputs.REGISTRY_USERNAME }}'
+            REGISTRY_PASSWORD = '${{ steps.set-outputs.outputs.REGISTRY_PASSWORD }}'
+            IMAGE_URL = '${{ steps.set-outputs.outputs.IMAGE_URL }}'
+
   build_and_push:
     needs:
       - setup
@@ -231,6 +342,19 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
     steps:
+      - name: Cache secret
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache_secret/.token
+          key: token-secret-output
+
+      - name: Decode
+        uses: weni-ai/actions-workflows/secret-output@main
+        id: decode
+        with:
+          op: toml-decode
+          in: "${{ needs.setup.outputs.encoded-outputs }}"
+
       - name: Set variables
         run: |
           platform=${{ matrix.platform }}
@@ -243,7 +367,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_IMAGE }}
+          images: ${{ steps.decode.outputs.IMAGE_URL }}
           tags: |
             ${{ inputs.image_tags }}
             ${{ needs.setup.outputs.image_by_environment }}
@@ -251,28 +375,28 @@ jobs:
             latest=${{ inputs.image_latest }}
             prefix=${{ inputs.image_tag_prefix }},onlatest=${{ inputs.image_tag_prefix_onlatest }}
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials from role arn
         uses: aws-actions/configure-aws-credentials@v4
-        if: needs.setup.outputs.use_role == 'true'
+        if: github.event_name != 'pull_request' && steps.decode.outputs.ROLE_ARN != ''
         with:
           audience: sts.amazonaws.com
           role-session-name: ${{ github.run_id }}
-          role-to-assume: ${{ secrets.ROLE_ARN }}
+          role-to-assume: ${{ steps.decode.outputs.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Login to Registry with aws role
         uses: docker/login-action@v3
-        if: github.event_name != 'pull_request' && needs.setup.outputs.use_role == 'true'
+        if: github.event_name != 'pull_request' && steps.decode.outputs.ROLE_ARN != ''
         with:
-          registry: ${{ secrets.REGISTRY_ECR }}
+          registry: ${{ steps.decode.outputs.REGISTRY_URL }}
 
       - name: Login to Registry with login and password
         uses: docker/login-action@v3
-        if: github.event_name != 'pull_request' && needs.setup.outputs.use_role != 'true'
+        if: github.event_name != 'pull_request' && steps.decode.outputs.REGISTRY_USERNAME != ''
         with:
-          registry: ${{ secrets.REGISTRY_ECR }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
+          registry: ${{ steps.decode.outputs.REGISTRY_URL }}
+          username: ${{ steps.decode.outputs.REGISTRY_USERNAME }}
+          password: ${{ steps.decode.outputs.REGISTRY_PASSWORD }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -333,7 +457,7 @@ jobs:
       #      }
       #    skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
-      - name: Build and Push Docker Image
+      - name: Build and Push Image
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -348,18 +472,18 @@ jobs:
           annotations: ${{ steps.meta.outputs.annotations }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ matrix.platform }}
-          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ steps.decode.outputs.IMAGE_URL }},push-by-digest=true,name-canonical=true,push=true
           cache-from: |
-            type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache-${{ env.PLATFORM_PAIR }}
+            type=registry,ref=${{ steps.decode.outputs.IMAGE_URL }}:buildcache-${{ env.PLATFORM_PAIR }}
 #            type=gha,scope=${{ inputs.target_application }}-${{ env.PLATFORM_PAIR }}
           cache-to: |
-            type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache-${{ env.PLATFORM_PAIR }},mode=max
+            type=registry,ref=${{ steps.decode.outputs.IMAGE_URL }}:buildcache-${{ env.PLATFORM_PAIR }},mode=max
 #            type=gha,mode=max,scope=${{ inputs.target_application }}-${{ env.PLATFORM_PAIR }}
 
       - name: Export digest and push tag
         env:
-          SOURCE_IMAGE: "${{ env.DOCKER_IMAGE }}@${{ steps.build.outputs.digest }}"
-          TARGET_IMAGE: "${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}-${{ env.PLATFORM_PAIR }}"
+          SOURCE_IMAGE: "${{ steps.decode.outputs.IMAGE_URL }}@${{ steps.build.outputs.digest }}"
+          TARGET_IMAGE: "${{ steps.decode.outputs.IMAGE_URL }}:${{ steps.meta.outputs.version }}-${{ env.PLATFORM_PAIR }}"
         run: |
           if [ "${{ inputs.debug }}" = "true" ] ; then
             set -xv
@@ -385,11 +509,24 @@ jobs:
       - setup
       - build_and_push
     steps:
+      - name: Cache secret
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache_secret/.token
+          key: token-secret-output
+
+      - name: Decode
+        uses: weni-ai/actions-workflows/secret-output@main
+        id: decode
+        with:
+          op: toml-decode
+          in: "${{ needs.setup.outputs.encoded-outputs }}"
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_IMAGE }}
+          images: ${{ steps.decode.outputs.IMAGE_URL }}
           tags: |
             ${{ inputs.image_tags }}
             ${{ needs.setup.outputs.image_by_environment }}
@@ -409,26 +546,26 @@ jobs:
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
-        if: needs.setup.outputs.use_role == 'true'
+        if: github.event_name != 'pull_request' && steps.decode.outputs.ROLE_ARN != ''
         with:
           audience: sts.amazonaws.com
           role-session-name: ${{ github.run_id }}
-          role-to-assume: ${{ secrets.ROLE_ARN }}
+          role-to-assume: ${{ steps.decode.outputs.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Login to Registry with role
         uses: docker/login-action@v3
-        if: github.event_name != 'pull_request' && needs.setup.outputs.use_role == 'true'
+        if: github.event_name != 'pull_request' && steps.decode.outputs.ROLE_ARN != ''
         with:
           registry: ${{ secrets.REGISTRY_ECR }}
 
       - name: Login to Registry with login and password
         uses: docker/login-action@v3
-        if: github.event_name != 'pull_request' && needs.setup.outputs.use_role != 'true'
+        if: github.event_name != 'pull_request' && steps.decode.outputs.REGISTRY_USERNAME != ''
         with:
-          registry: ${{ secrets.REGISTRY_ECR }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
+          registry: ${{ steps.decode.outputs.REGISTRY_URL }}
+          username: ${{ steps.decode.outputs.REGISTRY_USERNAME }}
+          password: ${{ steps.decode.outputs.REGISTRY_PASSWORD }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
@@ -437,7 +574,7 @@ jobs:
             set -xv
           fi
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "${DOCKER_METADATA_OUTPUT_JSON}") \
-            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
+            $(printf '${{ steps.decode.outputs.IMAGE_URL }}@sha256:%s ' *)
 
       - name: Inspect image
         working-directory: ${{ runner.temp }}/digests
@@ -462,43 +599,41 @@ jobs:
     #runs-on: ubuntu-22.04
     runs-on: ubuntu-latest
     steps:
+      - name: Cache secret
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache_secret/.token
+          key: token-secret-output
+
+      - name: Decode
+        uses: weni-ai/actions-workflows/secret-output@main
+        id: decode
+        with:
+          op: toml-decode
+          in: "${{ needs.setup.outputs.encoded-outputs }}"
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
-        if: needs.setup.outputs.use_role == 'true'
+        if: github.event_name != 'pull_request' && steps.decode.outputs.ROLE_ARN != ''
         with:
           audience: sts.amazonaws.com
           role-session-name: ${{ github.run_id }}
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
-      - name: Set VCS token
-        id: set-vcs-token
-        run: |
-          echo "VCS_TOKEN=$(
-            if [ "${{ needs.setup.outputs.use_role }}" = "true" ] ; then
-              aws ssm get-parameter --with-decryption \
-                --name "${{ inputs.aws_ssm_name }}" \
-                | jq -r .Parameter.Value
-            elif [ "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}" ] ; then
-              cat<<<"${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
-            fi
-          )" >> "${GITHUB_OUTPUT}"
-        env:
-          AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
-
       - name: Check out deploy repository
         uses: actions/checkout@v3
         with:
           ref: ${{ env.DEPLOY_REPOSITORY_BRANCH }}
           repository: ${{ env.DEPLOY_REPOSITORY }}
-          token: ${{ steps.set-vcs-token.outputs.VCS_TOKEN }}
+          token: ${{ steps.decode.outputs.VCS_TOKEN }}
           path: ./deploy-repository/
 
       - name: Update image on kubernetes manifests
         if: inputs.deploy_type == 'kubernetes'
         working-directory: ./deploy-repository/${{ env.DEPLOY_APPLICATION }}
         env:
-          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
+          IMAGE_TAG: ${{ steps.decode.outputs.IMAGE_URL }}:${{ needs.build_and_push.outputs.version }}
           IMAGE_ARCH: ${{ fromJson(needs.setup.outputs.image_arch)[0].platform }}
         run: |
           if [ "${{ inputs.debug }}" = "true" ] ; then
@@ -552,7 +687,7 @@ jobs:
         if: inputs.deploy_type == 'terraform'
         working-directory: ./deploy-repository/${{ inputs.target_application_directory_prefix }}
         env:
-          IMAGE_TAG: ${{ env.DOCKER_IMAGE }}:${{ needs.build_and_push.outputs.version }}
+          IMAGE_TAG: ${{ steps.decode.outputs.IMAGE_URL }}:${{ needs.build_and_push.outputs.version }}
           IMAGE_ARCH: ${{ fromJson(needs.setup.outputs.image_arch)[0].platform }}
         run: |
           if [ "${{ inputs.debug }}" = "true" ] ; then
@@ -594,7 +729,7 @@ jobs:
             echo "Target environment: ${{needs.setup.outputs.environment}}"
 
             echo "Replacing the following image:"
-            echo "  Image: ${DOCKER_IMAGE%%:*}"
+            echo "  Image: ${IMAGE_TAG%%:*}"
             echo "  Current version: ${OLD_VERSION}"
             echo "  Target version: ${{ needs.build_and_push.outputs.version }}"
 
@@ -617,7 +752,7 @@ jobs:
       - name: Commit & Push changes
         uses: actions-js/push@master
         with:
-          github_token: ${{ steps.set-vcs-token.outputs.VCS_TOKEN }}
+          github_token: ${{ steps.decode.outputs.VCS_TOKEN }}
           repository: ${{ env.DEPLOY_REPOSITORY }}
           directory: ./deploy-repository/
           branch: ${{ env.DEPLOY_REPOSITORY_BRANCH }}
