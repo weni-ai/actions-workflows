@@ -37,7 +37,7 @@ function get_secret(){
 		log 'Use secret env' 'DEBUG'
 		cat <<< "${SECRET}"
 	else
-		if [ ! -r "${CACHE_DIR}/.token" ] ; then
+		if [ ! -r "${CACHE_DIR}/.token" ] || [ ! -s "${CACHE_DIR}/.token" ] ; then
 			log 'Gen cache secret' 'DEBUG'
 			mkdir -p "${CACHE_DIR}"
 			gen_random_passphrase > "${CACHE_DIR}/.token"
@@ -102,7 +102,7 @@ case "${OPERATION}" in
 		done
 	;;
 	cleanup)
-		rm -rf "${CACHE_DIR}/.token"
+		true > "${CACHE_DIR}/.token"
 	;;
 	*)
 		echo $"op input can be only {encode|decode|toml-decode|cleanup}"
