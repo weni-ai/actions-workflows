@@ -781,10 +781,9 @@ jobs:
       - deploy
     runs-on: ubuntu-latest
     steps:
-      - name: Cache secret
-        uses: actions/cache@v4
+      - name: Get cache secret
+        uses: actions/cache/restore@v4
         with:
-          save-always: true
           path: ${{ github.workspace }}/.cache_secret/.token
           key: token-secret-output
 
@@ -793,5 +792,12 @@ jobs:
         uses: weni-ai/actions-workflows/secret-output@main
         with:
           op: "cleanup"
+
+      - name: Set cache secret
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.cache_secret/.token
+          key: token-secret-output
 
 # vim: nu ts=2 fdm=indent et ft=yaml shiftwidth=2 softtabstop=2:
