@@ -103,7 +103,8 @@ on:
       aws_ssm_registry_username:
         required: false
         type: string
-        default: "/cloud/registry/USERNAME"
+        #default: "/cloud/registry/USERNAME"
+        default: ""
       aws_ssm_registry_password:
         required: false
         type: string
@@ -180,7 +181,7 @@ jobs:
           REGISTRY_USERNAME=$(
             if [ "${{ inputs.image_registry_username }}" ] ; then
               cat<<<"${{ inputs.image_registry_username }}"
-            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" ] ; then
+            elif [ "${{ secrets.ROLE_ARN }}" -o "${{ inputs.aws_role_arn }}" -a "${{ inputs.aws_ssm_registry_username }}" ] ; then
               aws ssm get-parameter --with-decryption \
                 --name "${{ inputs.aws_ssm_registry_username }}" \
                 | jq -r .Parameter.Value
