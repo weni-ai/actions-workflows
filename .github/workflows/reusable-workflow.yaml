@@ -324,7 +324,7 @@ jobs:
         uses: weni-ai/actions-workflows/secret-output@main
         id: encode-output
         with:
-          in: |
+          in: |-
             VCS_TOKEN = '${{ steps.set-outputs.outputs.VCS_TOKEN }}'
             REGISTRY_URL = '${{ steps.set-outputs.outputs.REGISTRY_URL }}'
             REGISTRY_USERNAME = '${{ steps.set-outputs.outputs.REGISTRY_USERNAME }}'
@@ -569,7 +569,7 @@ jobs:
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
-        run: |
+        run: |-
           if [ "${{ inputs.debug }}" = "true" ] ; then
             set -xv
           fi
@@ -579,7 +579,7 @@ jobs:
       - name: Inspect image
         working-directory: ${{ runner.temp }}/digests
         if: inputs.debug == 'true'
-        run: |
+        run: |-
           for x in $(jq -cr '.tags | join(" ")' <<< "${DOCKER_METADATA_OUTPUT_JSON}"); do
             echo docker buildx imagetools inspect "${x}"
             docker buildx imagetools inspect "${x}"
