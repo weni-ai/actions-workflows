@@ -146,9 +146,9 @@ jobs:
     steps:
       - name: Configure AWS Credentials from secret
         uses: aws-actions/configure-aws-credentials@v4
-        if: secrets.ROLE_ARN != ''
+        if: env.role_arn != ''
         env:
-          use_role: ${{ secrets.ROLE_ARN }}
+          role_arn: ${{ secrets.ROLE_ARN }}
         with:
           audience: sts.amazonaws.com
           role-session-name: ${{ github.run_id }}
