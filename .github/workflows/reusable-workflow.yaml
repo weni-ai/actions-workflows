@@ -772,3 +772,25 @@ jobs:
           directory: ./deploy-repository/
           branch: ${{ env.DEPLOY_REPOSITORY_BRANCH }}
           message: "From ${{github.repository}}: ${{ github.workflow }}"
+
+  cleanup:
+    needs:
+      - setup
+      - merge
+      - build_and_push
+      - deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache secret
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache_secret/.token
+          key: token-secret-output
+
+      - name: Cleanup
+        if: always()
+        uses: weni-ai/actions-workflows/secret-output@main
+        with:
+          op: "cleanup"
+
+# vim: nu ts=2 fdm=indent et ft=yaml shiftwidth=2 softtabstop=2:
