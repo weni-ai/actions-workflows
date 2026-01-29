@@ -371,6 +371,28 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
     steps:
+      - name: Configure AWS Credentials from secret
+        uses: aws-actions/configure-aws-credentials@v4
+        if: env.role_arn != ''
+        env:
+          role_arn: ${{ secrets.ROLE_ARN }}
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ secrets.ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Configure AWS Credentials from input
+        uses: aws-actions/configure-aws-credentials@v4
+        if: inputs.aws_role_arn != ''
+        env:
+          use_role: ${{ inputs.aws_role_arn }}
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+
       - name: Set outputs
         id: set-outputs
         run: |
@@ -569,6 +591,28 @@ jobs:
       - setup
       - build_and_push
     steps:
+      - name: Configure AWS Credentials from secret
+        uses: aws-actions/configure-aws-credentials@v4
+        if: env.role_arn != ''
+        env:
+          role_arn: ${{ secrets.ROLE_ARN }}
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ secrets.ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Configure AWS Credentials from input
+        uses: aws-actions/configure-aws-credentials@v4
+        if: inputs.aws_role_arn != ''
+        env:
+          use_role: ${{ inputs.aws_role_arn }}
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+
       - name: Set outputs
         id: set-outputs
         run: |
@@ -689,6 +733,28 @@ jobs:
     #runs-on: ubuntu-22.04
     runs-on: ubuntu-latest
     steps:
+      - name: Configure AWS Credentials from secret
+        uses: aws-actions/configure-aws-credentials@v4
+        if: env.role_arn != ''
+        env:
+          role_arn: ${{ secrets.ROLE_ARN }}
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ secrets.ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Configure AWS Credentials from input
+        uses: aws-actions/configure-aws-credentials@v4
+        if: inputs.aws_role_arn != ''
+        env:
+          use_role: ${{ inputs.aws_role_arn }}
+        with:
+          audience: sts.amazonaws.com
+          role-session-name: ${{ github.run_id }}
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+
       - name: Set outputs
         id: set-outputs
         run: |
