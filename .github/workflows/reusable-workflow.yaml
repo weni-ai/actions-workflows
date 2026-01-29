@@ -113,6 +113,10 @@ on:
         required: false
         type: string
         default: "/cloud/registry/URL"
+      aws_ssm_encode_secret:
+        required: false
+        type: string
+        default: "/cloud/encode-secret"
 
       # kludges
       kludge_webapp_secret_enable:
@@ -176,6 +180,17 @@ jobs:
               cat<<<"${{ secrets.ROLE_ARN }}"
             fi
           )
+          ENCODE_SECRET=$(
+            if [ "${{ inputs.encode_secret }}" ] ; then
+              cat<<<"${{ inputs.encode_secret }}"
+            elif [ "${ROLE_ARN}" -a "${{ inputs.aws_ssm_encode_secret }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_encode_secret }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.ENCODE_SECRET }}" ] ; then
+              cat<<<"${{ secrets.ENCODE_SECRET }}"
+            fi
+          )
           VCS_TOKEN=$(
             if [ "${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}" ] ; then
               cat<<<"${{ secrets.DEVOPS_GITHUB_PERMANENT_TOKEN }}"
@@ -221,6 +236,7 @@ jobs:
           IMAGE_URL="${REGISTRY_URL}/${{ inputs.image_repository }}"
           echo "::add-mask::${VCS_TOKEN}"
           echo "::add-mask::${ROLE_ARN}"
+          echo "::add-mask::${ENCODE_SECRET}"
           echo "::add-mask::${REGISTRY_URL}"
           echo "::add-mask::${REGISTRY_USERNAME}"
           echo "::add-mask::${REGISTRY_PASSWORD}"
@@ -228,6 +244,10 @@ jobs:
           {
             echo 'ROLE_ARN<<EOFenv'
             cat<<<"${ROLE_ARN}"
+            echo 'EOFenv'
+
+            echo 'ENCODE_SECRET<<EOFenv'
+            cat<<<"${ENCODE_SECRET}"
             echo 'EOFenv'
 
             echo 'VCS_TOKEN<<EOFenv'
@@ -327,16 +347,11 @@ jobs:
             echo "| build_args           | build args to be used when building the container |"
           } | tee -a "${GITHUB_STEP_SUMMARY}"
 
-      - name: Cache secret
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/.cache_secret/.token
-          key: token-secret-output
-
       - name: Encode secret toml
         uses: weni-ai/actions-workflows/secret-output@main
         id: encode-output
         with:
+          secret: ${{ steps.set-outputs.outputs.ENCODE_SECRET }}
           in: |-
             VCS_TOKEN = '${{ steps.set-outputs.outputs.VCS_TOKEN }}'
             ROLE_ARN = '${{ steps.set-outputs.outputs.ROLE_ARN }}'
@@ -356,16 +371,46 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
     steps:
-      - name: Cache secret
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/.cache_secret/.token
-          key: token-secret-output
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          ROLE_ARN=$(
+            if [ "${{ inputs.aws_role_arn }}" ] ; then
+              cat<<<"${{ inputs.aws_role_arn }}"
+            elif [ "${{ secrets.ROLE_ARN }}" ] ; then
+              cat<<<"${{ secrets.ROLE_ARN }}"
+            fi
+          )
+          ENCODE_SECRET=$(
+            if [ "${{ inputs.encode_secret }}" ] ; then
+              cat<<<"${{ inputs.encode_secret }}"
+            elif [ "${ROLE_ARN}" -a "${{ inputs.aws_ssm_encode_secret }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_encode_secret }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.ENCODE_SECRET }}" ] ; then
+              cat<<<"${{ secrets.ENCODE_SECRET }}"
+            fi
+          )
+          echo "::add-mask::${ROLE_ARN}"
+          echo "::add-mask::${ENCODE_SECRET}"
+          {
+            echo 'ROLE_ARN<<EOFenv'
+            cat<<<"${ROLE_ARN}"
+            echo 'EOFenv'
+
+            echo 'ENCODE_SECRET<<EOFenv'
+            cat<<<"${ENCODE_SECRET}"
+            echo 'EOFenv'
+          } >> "${GITHUB_OUTPUT}"
+        env:
+          AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
 
       - name: Decode
         uses: weni-ai/actions-workflows/secret-output@main
         id: decode
         with:
+          secret: ${{ steps.set-outputs.outputs.ENCODE_SECRET }}
           op: toml-decode
           in: "${{ needs.setup.outputs.encoded_outputs }}"
 
@@ -524,16 +569,46 @@ jobs:
       - setup
       - build_and_push
     steps:
-      - name: Cache secret
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/.cache_secret/.token
-          key: token-secret-output
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          ROLE_ARN=$(
+            if [ "${{ inputs.aws_role_arn }}" ] ; then
+              cat<<<"${{ inputs.aws_role_arn }}"
+            elif [ "${{ secrets.ROLE_ARN }}" ] ; then
+              cat<<<"${{ secrets.ROLE_ARN }}"
+            fi
+          )
+          ENCODE_SECRET=$(
+            if [ "${{ inputs.encode_secret }}" ] ; then
+              cat<<<"${{ inputs.encode_secret }}"
+            elif [ "${ROLE_ARN}" -a "${{ inputs.aws_ssm_encode_secret }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_encode_secret }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.ENCODE_SECRET }}" ] ; then
+              cat<<<"${{ secrets.ENCODE_SECRET }}"
+            fi
+          )
+          echo "::add-mask::${ROLE_ARN}"
+          echo "::add-mask::${ENCODE_SECRET}"
+          {
+            echo 'ROLE_ARN<<EOFenv'
+            cat<<<"${ROLE_ARN}"
+            echo 'EOFenv'
+
+            echo 'ENCODE_SECRET<<EOFenv'
+            cat<<<"${ENCODE_SECRET}"
+            echo 'EOFenv'
+          } >> "${GITHUB_OUTPUT}"
+        env:
+          AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
 
       - name: Decode
         uses: weni-ai/actions-workflows/secret-output@main
         id: decode
         with:
+          secret: ${{ steps.set-outputs.outputs.ENCODE_SECRET }}
           op: toml-decode
           in: "${{ needs.setup.outputs.encoded_outputs }}"
 
@@ -614,16 +689,46 @@ jobs:
     #runs-on: ubuntu-22.04
     runs-on: ubuntu-latest
     steps:
-      - name: Cache secret
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/.cache_secret/.token
-          key: token-secret-output
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          ROLE_ARN=$(
+            if [ "${{ inputs.aws_role_arn }}" ] ; then
+              cat<<<"${{ inputs.aws_role_arn }}"
+            elif [ "${{ secrets.ROLE_ARN }}" ] ; then
+              cat<<<"${{ secrets.ROLE_ARN }}"
+            fi
+          )
+          ENCODE_SECRET=$(
+            if [ "${{ inputs.encode_secret }}" ] ; then
+              cat<<<"${{ inputs.encode_secret }}"
+            elif [ "${ROLE_ARN}" -a "${{ inputs.aws_ssm_encode_secret }}" ] ; then
+              aws ssm get-parameter --with-decryption \
+                --name "${{ inputs.aws_ssm_encode_secret }}" \
+                | jq -r .Parameter.Value
+            elif [ "${{ secrets.ENCODE_SECRET }}" ] ; then
+              cat<<<"${{ secrets.ENCODE_SECRET }}"
+            fi
+          )
+          echo "::add-mask::${ROLE_ARN}"
+          echo "::add-mask::${ENCODE_SECRET}"
+          {
+            echo 'ROLE_ARN<<EOFenv'
+            cat<<<"${ROLE_ARN}"
+            echo 'EOFenv'
+
+            echo 'ENCODE_SECRET<<EOFenv'
+            cat<<<"${ENCODE_SECRET}"
+            echo 'EOFenv'
+          } >> "${GITHUB_OUTPUT}"
+        env:
+          AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
 
       - name: Decode
         uses: weni-ai/actions-workflows/secret-output@main
         id: decode
         with:
+          secret: ${{ steps.set-outputs.outputs.ENCODE_SECRET }}
           op: toml-decode
           in: "${{ needs.setup.outputs.encoded_outputs }}"
 
@@ -772,32 +877,5 @@ jobs:
           directory: ./deploy-repository/
           branch: ${{ env.DEPLOY_REPOSITORY_BRANCH }}
           message: "From ${{github.repository}}: ${{ github.workflow }}"
-
-  cleanup:
-    needs:
-      - setup
-      - merge
-      - build_and_push
-      - deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get cache secret
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ github.workspace }}/.cache_secret/.token
-          key: token-secret-output
-
-      - name: Cleanup
-        if: always()
-        uses: weni-ai/actions-workflows/secret-output@main
-        with:
-          op: "cleanup"
-
-      - name: Set cache secret
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.cache_secret/.token
-          key: token-secret-output
 
 # vim: nu ts=2 fdm=indent et ft=yaml shiftwidth=2 softtabstop=2:
