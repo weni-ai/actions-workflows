@@ -836,9 +836,7 @@ jobs:
             [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
           }
 
-          DEPLOY_ENV_TARGET=$(
-            echo ${{ needs.build_and_push.outputs.version }} | grep -Eo 'staging|develop' || echo 'production'
-          )
+          DEPLOY_ENV_TARGET="${{ inputs.default_environment }}"
 
           echo "Target environment: ${DEPLOY_ENV_TARGET}"
 
