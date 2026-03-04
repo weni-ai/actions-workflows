@@ -92,6 +92,10 @@ on:
         required: false
         type: string
         default: "deployment.json"
+      target_patch_key:
+        required: false
+        type: string
+        default: "/spec/template/spec/containers/0/image"
       aws_region:
         required: false
         type: string
@@ -848,7 +852,7 @@ jobs:
           else
             CURRENT_IMAGE=$(
               cat "${DEPLOY_ENV_TARGET}/${{ env.DEPLOY_PATCH_TARGET }}" \
-                | jq -r '.[] | select(.path == "/spec/template/spec/containers/0/image") | .value'
+                | jq -r '.[] | select(.path == "${{ inputs.target_patch_key }}") | .value'
             )
             CURRENT_VERSION=$(extver "${CURRENT_IMAGE}")
             TARGET_VERSION=$(extver "${{ env.IMAGE_TAG }}")
@@ -860,7 +864,7 @@ jobs:
 
             if verlte "${CURRENT_VERSION}" "${TARGET_VERSION}"; then
               NEW_CONFIG=$(
-                jq --arg imageTag "${{ env.IMAGE_TAG }}" '(.. | select(.path == "/spec/template/spec/containers/0/image")?) += {value: $imageTag }' "${DEPLOY_ENV_TARGET}/${{ env.DEPLOY_PATCH_TARGET }}"
+                jq --arg imageTag "${{ env.IMAGE_TAG }}" '(.. | select(.path == "${{ inputs.target_patch_key }}")?) += {value: $imageTag }' "${DEPLOY_ENV_TARGET}/${{ env.DEPLOY_PATCH_TARGET }}"
               )
               echo "New configuration:"
               echo "${NEW_CONFIG}" | tee "${DEPLOY_ENV_TARGET}/${{ env.DEPLOY_PATCH_TARGET }}"

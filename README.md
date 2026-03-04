@@ -138,6 +138,7 @@ jobs:
 | `target_repository` | String | Repository to be updated when a image is generated. |
 | `target_repository_branch` | String | `target_repository` to be modified. Defaults to `main`. |
 | `target_patch_file` | String | File to be updated the application version. Defaults to `deployment.json` for kubernetes. |
+| `target_patch_key` | String | Key to be updated on patch file. Defaults to `/spec/template/spec/containers/0/image` for kubernetes. |
 | `kludge_webapp_secret_enable` | Boolean | Enable get secrets from webapp-secret repository. Defaults to `false`. |
 
 ### Secrets
