@@ -837,7 +837,7 @@ jobs:
           }
 
           DEPLOY_ENV_TARGET=$(
-            echo ${{ needs.build_and_push.outputs.version }} | grep -Eo 'staging|develop|ire|india|mumbaistg' || echo 'production'
+            echo ${{ needs.build_and_push.outputs.version }} | grep -Eo 'mumbai-staging|staging|develop|ireland|mumbai' || echo 'production'
           )
 
           echo "Target environment: ${DEPLOY_ENV_TARGET}"
