@@ -332,7 +332,8 @@ jobs:
             # Set build args
             echo 'BUILD_ARGS<<EOFenv'
             if [ -r "webapp-secret/${GITHUB_REPOSITORY_NAME}/${DEPLOY_ENVIRONMENT}/env" ] ; then
-              cat "webapp-secret/${GITHUB_REPOSITORY_NAME}/${DEPLOY_ENVIRONMENT}/env"
+              cat "webapp-secret/${GITHUB_REPOSITORY_NAME}/${DEPLOY_ENVIRONMENT}/env" \
+                | sed -e '/^#/d' -e '/^\s*$/d'
             fi
             #if [ "${BUILD_ARGS}" ] ; then
             #  cat <<<"${BUILD_ARGS}"
