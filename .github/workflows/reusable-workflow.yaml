@@ -928,13 +928,13 @@ jobs:
             if verlte "${OLD_VERSION}" "${{ needs.build_and_push.outputs.version }}" || [[ ! "${OLD_VERSION}" =~ [0-9]+\.[0-9]+\.[0-9]+ ]] ; then
               # Get region
               LAMBDA_REGION=$(
-                cat "one.yaml" \
+                cat 'one.yaml' \
                   | yq '.workspaces.'"${ENVIRONMENT_ONE}"'.lambda."'"${APPLICATION_NAME}"'".region' -r
               )
               if [ "${LAMBDA_REGION}" = "null" ] ; then
                 LAMBDA_REGION=$(
-                  cat "one.yaml" \
-                    | yq '.workspaces.region' -r
+                  cat 'one.yaml' \
+                    | yq ".workspaces.${ENVIRONMENT_ONE}.region" -r
                 )
               fi
 
