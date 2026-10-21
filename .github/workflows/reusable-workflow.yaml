@@ -319,11 +319,7 @@ jobs:
             echo "DIGESTS_PREFIX=digests-$( echo "${{ steps.set-outputs.outputs.REGISTRY_URL }}" | tr './' '-' )"
             echo 'image_arch<<EOFenv'
             if [ "${{ inputs.image_arch }}" = "" ] ; then
-              if [ "${{ github.repository_visibility }}" = "private" ] ; then
-                echo '[{"platform":"linux/arm64","runner":"ubuntu-latest"},{"platform":"linux/amd64","runner":"ubuntu-latest"}]'
-              else
-                echo '[{"platform":"linux/arm64","runner":"ubuntu-24.04-arm"},{"platform":"linux/amd64","runner":"ubuntu-latest"}]'
-              fi
+              echo '[{"platform":"linux/arm64","runner":"ubuntu-24.04-arm"},{"platform":"linux/amd64","runner":"ubuntu-latest"}]'
             else
               echo '${{ inputs.image_arch }}'
             fi
